@@ -1,0 +1,36 @@
+# Claude Code local settings (may contain personal paths)
+.claude/
+
+# Local environment files
+.env
+.env.*
+!.env.example
+
+# Google OAuth credentials and tokens (NEVER commit)
+config/credentials.json
+config/credentials_info.json
+config/token.json
+config/service_account.json
+
+# Purchase history (personal data)
+data/lotto645_purchases.json
+data/pension720_purchases.json
+data/last_run.json
+data/*.lock
+
+# Logs and debug artifacts
+logs/
+*.log
+*.png
+.playwright-mcp/
+
+# Node.js
+node_modules/
+package-lock.json
+npm-debug.log*
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/

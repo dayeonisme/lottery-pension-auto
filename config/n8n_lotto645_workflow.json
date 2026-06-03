@@ -1,0 +1,54 @@
+{
+  "name": "lotto645 automation",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 10 * * 1"
+            }
+          ]
+        }
+      },
+      "id": "trigger-lotto645",
+      "name": "Schedule Trigger (Monday 10:00)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const { execSync } = require('child_process');\nconst projectRoot = $env.LOTTERY_AUTO_ROOT || '/path/to/lottery-pension-auto';\ntry {\n  execSync(\n    `/usr/bin/python3 ${projectRoot}/scripts/lotto645_runner.py`,\n    {\n      cwd: projectRoot,\n      timeout: 300000,\n      env: {\n        PATH: '/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin',\n        HOME: $env.HOME || '',\n        GOOGLE_SPREADSHEET_ID: $env.GOOGLE_SPREADSHEET_ID || '',\n        GOOGLE_SERVICE_ACCOUNT_PATH: $env.GOOGLE_SERVICE_ACCOUNT_PATH || `${projectRoot}/config/service_account.json`,\n        DHLOTTERY_ID: $env.DHLOTTERY_ID || '',\n        DHLOTTERY_PW: $env.DHLOTTERY_PW || '',\n        TELEGRAM_CHAT_ID: $env.TELEGRAM_CHAT_ID || '',\n        TELEGRAM_BOT_TOKEN: $env.TELEGRAM_BOT_TOKEN || ''\n      }\n    }\n  );\n  return [{ json: { exitCode: 0 } }];\n} catch (e) {\n  return [{ json: { exitCode: e.status || 1 } }];\n}"
+      },
+      "id": "exec-lotto645",
+      "name": "Execute lotto645_runner.py",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    }
+  ],
+  "connections": {
+    "Schedule Trigger (Monday 10:00)": {
+      "main": [
+        [
+          {
+            "node": "Execute lotto645_runner.py",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "saveExecutionProgress": true
+  },
+  "staticData": null,
+  "tags": []
+}
