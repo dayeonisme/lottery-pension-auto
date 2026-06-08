@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+# Pre-commit hook: block secrets and sensitive files.
+# Install: ln -sf ../../scripts/pre-commit .git/hooks/pre-commit
+
+set -euo pipefail
+
+FAIL=0
+
+red() { printf '\033[31m%s\033[0m\n' "$*"; }
+
+STAGED=$(git diff --cached --name-only)
+
+# ── 1. Block specific sensitive files ─────────────────────────────────────────
+BLOCKED_FILES=(
+    ".env"
+    "config/credentials.json"
+    "config/credentials_info.json"
+    "config/token.json"
+    "config/service_account.json"
+)
+
+for f in "${BLOCKED_FILES[@]}"; do
+    if echo "$STAGED" | grep -qF "$f"; then
+        red "BLOCKED FILE: $f contains credentials and must not be committed."
+        FAIL=1
+    fi
+done
+
+if echo "$STAGED" | grep -qE '^data/(lotto645|pension720)_purchases\.json|^data/last_run\.json'; then
+    red "BLOCKED: data/ purchase history files contain personal data and must not be committed."
+    FAIL=1
+fi
+
+# ── 2. Scan diff for secrets (exclude hook script itself) ─────────────────────
+DIFF=$(git diff --cached -- ':!scripts/pre-commit')
+
+check_pattern() {
+    local label="$1"
+    local pattern="$2"
+    if echo "$DIFF" | grep -qE "^\+.*${pattern}"; then
+        red "SENSITIVE DATA: $label detected in staged changes."
+        FAIL=1
+    fi
+}
+
+check_pattern "Telegram bot token"       'TELEGRAM_BOT_TOKEN=[0-9]{8,}:'
+check_pattern "API key / token value"    '(API_KEY|BOT_TOKEN|ACCESS_TOKEN|SPREADSHEET_ID)=[A-Za-z0-9_/-]{20,}'
+check_pattern "DH Lottery credentials"  'DHLOTTERY_(ID|PW)=[^y\s][^\s]{2,}'
+check_pattern "Google private key"       '"private_key"\s*:\s*"-----BEGIN'
+
+REAL_PATH='\/Users\/dayeon\.'
+check_pattern "real home path"           "$REAL_PATH"
+
+REAL_NAME='박다''연'
+check_pattern "real name"               "$REAL_NAME"
+
+# ── 3. Report ──────────────────────────────────────────────────────────────────
+if [[ $FAIL -eq 1 ]]; then
+    echo ""
+    red "Commit blocked. Remove the items above before committing."
+    echo "If a match is a false positive, check scripts/pre-commit to refine the pattern."
+    exit 1
+fi
+
+exit 0
