@@ -524,18 +524,29 @@ def main():
                         f'  {t["no"]}. {" ".join(str(n).zfill(2) for n in t["numbers"])}'
                         for t in tickets
                     )
-                    prize_alert = ''
+                    rank_labels = {'1st': '1등', '2nd': '2등', '3rd': '3등', '4th': '4등 (5만원)', '5th': '5등 (5천원)', 'no prize': '낙첨'}
+                    prize_section = ''
                     if prize_results:
                         top_ranks = [t for pr in prize_results for t in pr['ticket_results'] if t['rank'] in ('1st', '2nd', '3rd')]
                         if top_ranks:
-                            prize_alert = f'\n\n⚠️ {prize_results[0]["round"]}회 {top_ranks[0]["rank"]} 당첨! 수동 확인 필요'
                             logging.warning('HIGH RANK WIN: round=%d rank=%s — manual prize check required', prize_results[0]['round'], top_ranks[0]['rank'])
+                        lines = [f'\n📊 전주 제{prize_results[0]["round"]}회 당첨 결과:']
+                        total_prize = 0
+                        for pr in prize_results:
+                            for t in pr['ticket_results']:
+                                label = rank_labels.get(t['rank'], t['rank'])
+                                if t['rank'] in ('1st', '2nd', '3rd'):
+                                    label += ' ⚠️수동확인'
+                                lines.append(f'  {t["no"]}. {label}')
+                                total_prize += t['prize']
+                        lines.append(f'  💰 합계: {total_prize:,}원')
+                        prize_section = '\n'.join(lines)
                     send_telegram(
                         f'[OK] 로또6/45 제{win_info["round"] + 1}회 구매 완료\n\n'
                         f'🎟 구매 번호:\n{ticket_lines}\n\n'
                         f'📅 추첨일: {draw_date}\n'
                         f'🕐 구매시각: {now_kst().strftime("%Y-%m-%d %H:%M")}'
-                        f'{prize_alert}'
+                        f'{prize_section}'
                     )
                 else:
                     logging.info('[DRY-RUN] STEP 3+4 skipped. Prize results: %d entries', len(prize_results))
