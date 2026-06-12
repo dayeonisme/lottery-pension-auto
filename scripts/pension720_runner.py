@@ -197,8 +197,10 @@ def _purchase_mobile(page) -> list:
     """전제: 이미 로그인된 page. 모바일 전용 구매 페이지 사용."""
     page.goto(
         'https://el.dhlottery.co.kr/game_mobile/pension720/game.jsp',
-        wait_until='networkidle', timeout=30000,
+        wait_until='domcontentloaded', timeout=30000,
     )
+    # 모바일 페이지는 백그라운드 요청이 지속되므로 networkidle 대신 실제 필요한 요소 대기
+    page.wait_for_function("typeof selNumberPopup === 'function'", timeout=15000)
     logging.info('Mobile purchase page: %s', page.url)
     if 'login' in page.url or page.query_selector('#inpUserId') is not None:
         raise RuntimeError(f'Mobile purchase: session not carried over, redirected to login. URL: {page.url}')
