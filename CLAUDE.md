@@ -67,13 +67,12 @@ SSH key 위치: `/home/ubuntu/.ssh/id_ed25519` (ubuntu 유저 소유)
 GCP SSH 세션에서는 heredoc(`<< 'EOF'`) 사용 시 터미널이 들여쓰기를 자동 추가하여 EOF 종료 토큰을 인식하지 못하는 문제가 있다. 임시 Python 스크립트 실행이 필요할 때는 heredoc 대신 `python3 -c "..."` 한 줄 방식을 사용한다.
 
 ```bash
-# 환경변수 로드 (수동 실행 시 매번 필요)
-export $(sudo cat /etc/n8n/env | xargs)
-
-# 수동 실행
-python3 scripts/pension720_runner.py
-python3 scripts/lotto645_runner.py
+# 수동 실행 (ubuntu 유저 + 환경변수 한 번에) — data/ 파일이 ubuntu 소유(644)라 이 방식만 작동
+sudo -u ubuntu env $(sudo cat /etc/n8n/env | xargs) python3 /home/ubuntu/lottery_auto/scripts/pension720_runner.py
+sudo -u ubuntu env $(sudo cat /etc/n8n/env | xargs) python3 /home/ubuntu/lottery_auto/scripts/lotto645_runner.py
 ```
+
+> **주의**: `export $(...)` 후 별도 실행하면 `sudo -u ubuntu` 전환 시 환경변수가 전달되지 않아 `DHLOTTERY_ID/PW not set` 오류 발생.
 
 ## Running scripts
 
