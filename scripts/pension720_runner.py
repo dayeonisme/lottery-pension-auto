@@ -176,6 +176,7 @@ def check_prizes(win_info: dict, dry_run: bool = False) -> list:
                 'winning_group': win_info['winGroup'],
                 'winning_numbers': win_info['winNumbers'],
                 'checked': True,
+                'sheets_updated': False,
                 'tickets': ticket_results,
                 'total_prize': total,
             }
@@ -344,12 +345,18 @@ def save_and_update_sheets(win_round: int, tickets: list, prize_results: list, d
 
     if prize_results:
         total_updated = 0
+        data2 = json.loads(PURCHASES_PATH.read_text(encoding='utf-8'))
         for pr in prize_results:
             updated = update_prize_results('pension720', pr['round'], pr['ticket_results'], pr['purchase_date'])
             logging.info('Sheets: updated %d prize rows for round %d (%s)', updated, pr['round'], pr['purchase_date'])
             if updated == 0:
                 logging.warning('Sheets: 0 rows matched for %s round %d — purchase_date mismatch?', pr['purchase_date'], pr['round'])
+            else:
+                for e in data2['pension720']:
+                    if e['round'] == pr['round'] and e['purchase_date'] == pr['purchase_date']:
+                        e['result']['sheets_updated'] = True
             total_updated += updated
+        PURCHASES_PATH.write_text(json.dumps(data2, indent=2, ensure_ascii=False))
         if total_updated > 0:
             set_pending_sheets_round(0)
         else:
@@ -425,26 +432,23 @@ def main():
             if not os.environ.get('DHLOTTERY_ID') or not os.environ.get('DHLOTTERY_PW'):
                 raise RuntimeError('DHLOTTERY_ID or DHLOTTERY_PW is not set')
 
-            # pending_sheets_round 재시도
-            pending_round = _read_last_run()['pension720'].get('pending_sheets_round', 0)
-            if pending_round > 0:
-                logging.info('Retrying Sheets update for round %d (pending)', pending_round)
-                purchases = json.loads(PURCHASES_PATH.read_text(encoding='utf-8'))
-                checked_entries = [e for e in purchases['pension720']
-                                   if e['round'] == pending_round and e['result']['checked']]
-                total_retry = 0
-                for e in checked_entries:
-                    updated = update_prize_results('pension720', pending_round, e['result']['tickets'], e['purchase_date'])
-                    logging.info('Sheets retry: %d rows for round %d (%s)', updated, pending_round, e['purchase_date'])
-                    if updated == 0:
-                        logging.warning('Sheets retry: 0 rows matched for %s — purchase_date mismatch?', e['purchase_date'])
-                    total_retry += updated
-                if total_retry > 0:
-                    set_pending_sheets_round(0)
-                elif checked_entries:
-                    logging.warning('Sheets retry: 0 rows total — pending_sheets_round kept for next run')
-                else:
-                    logging.warning('Sheets retry: no checked entries for round %d — clearing stale pending flag', pending_round)
+            # 시트 미반영 항목 재시도 (checked=True, sheets_updated 없거나 False)
+            purchases = json.loads(PURCHASES_PATH.read_text(encoding='utf-8'))
+            unsynced = [e for e in purchases['pension720']
+                        if e['result'].get('checked') and not e['result'].get('sheets_updated', True)]
+            if unsynced:
+                logging.info('Found %d unsynced prize entries — retrying Sheets update', len(unsynced))
+                for e in unsynced:
+                    updated = update_prize_results('pension720', e['round'], e['result']['tickets'], e['purchase_date'])
+                    logging.info('Sheets retry: %d rows for round %d (%s)', updated, e['round'], e['purchase_date'])
+                    if updated > 0:
+                        e['result']['sheets_updated'] = True
+                    else:
+                        logging.warning('Sheets retry: 0 rows matched for round %d (%s)', e['round'], e['purchase_date'])
+                PURCHASES_PATH.write_text(json.dumps(purchases, indent=2, ensure_ascii=False))
+                # legacy pending_sheets_round 플래그도 정리
+                pending_round = _read_last_run()['pension720'].get('pending_sheets_round', 0)
+                if pending_round > 0:
                     set_pending_sheets_round(0)
 
         from playwright.sync_api import sync_playwright
