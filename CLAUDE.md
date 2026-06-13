@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to coding agents (Claude Code, Codex 등) when working with code in this repository. `AGENTS.md`는 이 파일을 가리키는 symlink — 단일 소스.
 
 ## What this project does
 
@@ -136,7 +136,7 @@ Both runners follow the identical 4-step pattern: fetch → check → purchase �
 
 **KST dates**: All date calculations (`next_saturday`, `next_thursday`, `purchase_date`, `draw_confirmed_date`) use `datetime.now(timezone(timedelta(hours=9)))` for Korea Standard Time.
 
-## MCP servers (Claude Code)
+## MCP servers
 
 Configured in `config/mcp_config.json` (reference only). The operative config written to `%APPDATA%\Claude\claude_desktop_config.json` uses `cmd /c npx` wrappers required on Windows:
 - **puppeteer**: headless Chrome automation
