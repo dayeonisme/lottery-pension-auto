@@ -67,6 +67,17 @@ export TELEGRAM_CHAT_ID="your_telegram_chat_id"
 export TELEGRAM_BOT_TOKEN="your_telegram_bot_token"
 ```
 
+각 변수의 의미는 다음과 같습니다.
+
+| 변수 | 필수 | 의미 |
+|------|------|------|
+| `GOOGLE_SPREADSHEET_ID` | ✅ | 결과를 기록할 Google Spreadsheet의 ID. 시트 URL `.../d/<ID>/edit`의 `<ID>` 부분 |
+| `GOOGLE_SERVICE_ACCOUNT_PATH` | ✅ | 서비스 계정 JSON 키 파일 경로 (기본 `config/service_account.json`) |
+| `DHLOTTERY_ID` | ✅ | 동행복권(dhlottery.co.kr) 로그인 아이디 |
+| `DHLOTTERY_PW` | ✅ | 동행복권 로그인 비밀번호 |
+| `TELEGRAM_BOT_TOKEN` | ⬜ | 알림을 보낼 Telegram 봇 토큰. BotFather에서 발급. 미설정 시 알림만 생략, 자동화는 정상 실행 |
+| `TELEGRAM_CHAT_ID` | ⬜ | 알림을 받을 채팅(또는 채널)의 ID. `BOT_TOKEN`과 한 쌍으로 동작 |
+
 실제 계정 정보, Telegram 토큰, Google 인증 파일은 GitHub에 커밋하지 마세요.
 
 ## 수동 실행
