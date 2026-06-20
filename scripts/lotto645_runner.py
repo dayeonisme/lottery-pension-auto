@@ -185,6 +185,23 @@ def check_prizes(win_info: dict, dry_run: bool = False) -> list:
     return all_results
 
 
+# 알림용 당첨결과 수집 — check_prizes 반환값(이번 실행에서 새로 체크한 것)과 분리.
+# 이전 실행(예: STEP 2 성공 후 STEP 3 실패)에서 이미 checked=True로 기록된 동일 회차
+# 결과도 포함해야 성공 알림에 '전주 당첨결과'가 누락되지 않음.
+def collect_report_results(win_round: int) -> list:
+    """해당 회차의 확인 완료된 당첨결과를 JSON에서 수집. 반환: [{purchase_date, round, ticket_results}, ...]"""
+    data = json.loads(PURCHASES_PATH.read_text(encoding='utf-8'))
+    results = []
+    for e in data['lotto645']:
+        if e['round'] == win_round and e['result'].get('checked') and e['result'].get('tickets'):
+            results.append({
+                'purchase_date': e.get('purchase_date', ''),
+                'round': e['round'],
+                'ticket_results': e['result']['tickets'],
+            })
+    return results
+
+
 def _purchase_mobile_lotto645(page, count: int = 5) -> list:
     """전제: 이미 로그인된 page. ol.dhlottery.co.kr 모바일 전용 구매 페이지 사용."""
     # www.dhlottery.co.kr 로그인 쿠키를 ol.dhlottery.co.kr 도메인에 복사
@@ -525,14 +542,17 @@ def main():
                         for t in tickets
                     )
                     rank_labels = {'1st': '1등', '2nd': '2등', '3rd': '3등', '4th': '4등 (5만원)', '5th': '5등 (5천원)', 'no prize': '낙첨'}
+                    # 알림은 이번 실행에서 새로 체크한 것뿐 아니라 이전 실행에서 이미
+                    # 체크된 동일 회차 결과까지 포함 (STEP 2 성공 후 STEP 3 실패 케이스 대응)
+                    report_results = collect_report_results(win_info['round'])
                     prize_section = ''
-                    if prize_results:
-                        top_ranks = [t for pr in prize_results for t in pr['ticket_results'] if t['rank'] in ('1st', '2nd', '3rd')]
+                    if report_results:
+                        top_ranks = [t for pr in report_results for t in pr['ticket_results'] if t['rank'] in ('1st', '2nd', '3rd')]
                         if top_ranks:
-                            logging.warning('HIGH RANK WIN: round=%d rank=%s — manual prize check required', prize_results[0]['round'], top_ranks[0]['rank'])
-                        lines = [f'\n📊 전주 제{prize_results[0]["round"]}회 당첨 결과:']
+                            logging.warning('HIGH RANK WIN: round=%d rank=%s — manual prize check required', report_results[0]['round'], top_ranks[0]['rank'])
+                        lines = [f'\n📊 전주 제{report_results[0]["round"]}회 당첨 결과:']
                         total_prize = 0
-                        for pr in prize_results:
+                        for pr in report_results:
                             for t in pr['ticket_results']:
                                 label = rank_labels.get(t['rank'], t['rank'])
                                 if t['rank'] in ('1st', '2nd', '3rd'):
