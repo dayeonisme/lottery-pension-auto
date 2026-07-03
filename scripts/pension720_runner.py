@@ -213,10 +213,13 @@ def collect_report_results(win_round: int) -> list:
 # STEP 3 모바일 플로우 (GCP IP 차단 우회: el.dhlottery.co.kr/game_mobile/)
 def _purchase_mobile(page) -> list:
     """전제: 이미 로그인된 page. 모바일 전용 구매 페이지 사용."""
-    page.goto(
-        'https://el.dhlottery.co.kr/game_mobile/pension720/game.jsp',
-        wait_until='domcontentloaded', timeout=30000,
-    )
+    from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
+    mobile_url = 'https://el.dhlottery.co.kr/game_mobile/pension720/game.jsp'
+    try:
+        page.goto(mobile_url, wait_until='domcontentloaded', timeout=30000)
+    except PlaywrightTimeoutError:
+        logging.warning('Mobile purchase page goto timed out — retrying once')
+        page.goto(mobile_url, wait_until='domcontentloaded', timeout=30000)
     # 모바일 페이지는 백그라운드 요청이 지속되므로 networkidle 대신 실제 필요한 요소 대기
     page.wait_for_function("typeof selNumberPopup === 'function'", timeout=15000)
     logging.info('Mobile purchase page: %s', page.url)
