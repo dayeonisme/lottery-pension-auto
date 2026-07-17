@@ -301,7 +301,17 @@ def purchase_tickets(page) -> list:
         pass
 
     # iframe 로드 완료까지 대기 (e2-micro 대응: 30초)
-    page.wait_for_selector('iframe#ifrm_tab', timeout=30000)
+    # 리다이렉트 감지(page.url)와 무관하게 데스크탑 iframe이 안 뜨는 경우가 있음(2026-07-17 확인)
+    # — 그 경우 모바일 플로우로 폴백.
+    from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
+    try:
+        page.wait_for_selector('iframe#ifrm_tab', timeout=30000)
+    except PlaywrightTimeoutError:
+        logging.warning(
+            'Desktop iframe#ifrm_tab not found after 30s (url=%s) — falling back to mobile flow',
+            page.url,
+        )
+        return _purchase_mobile(page)
     frame_el = page.query_selector('iframe#ifrm_tab')
     frame = frame_el.content_frame()
     if frame is None:
@@ -486,6 +496,7 @@ def main():
                 ]
             )
             try:
+                page = None
                 context = browser.new_context(
                     user_agent=USER_AGENT,
                     viewport={'width': 1280, 'height': 720},
@@ -543,6 +554,15 @@ def main():
                     )
                 else:
                     logging.info('[DRY-RUN] STEP 3+4 skipped. Prize results: %d entries', len(prize_results))
+            except Exception:
+                if not dry_run and page is not None:
+                    try:
+                        shot_path = LOG_PATH.parent / f'failure_pension720_{now_kst().strftime("%Y%m%d_%H%M%S")}.png'
+                        page.screenshot(path=str(shot_path))
+                        logging.error('Failure diagnostics: url=%s screenshot=%s', page.url, shot_path)
+                    except Exception as diag_err:
+                        logging.error('Failed to capture failure diagnostics: %r', diag_err)
+                raise
             finally:
                 signal.alarm(0)
                 browser.close()
