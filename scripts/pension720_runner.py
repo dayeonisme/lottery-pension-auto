@@ -234,15 +234,26 @@ def _purchase_mobile(page) -> list:
         time.sleep(0.3)
         page.evaluate('doAuto()')
         time.sleep(0.8)
-        page.evaluate('doVerify()')
-        # 고정 sleep 대신 #ajax_loading("통신중입니다") 사라질 때까지 대기.
-        # 2026-07-17 낮 시간대 수동 실행 시 서버 응답 지연으로 오버레이가
-        # 안 사라져 다음 조 클릭이 30초간 막히는 현상 확인 — 최대 40초까지 대기.
-        try:
-            page.wait_for_selector('#ajax_loading', state='hidden', timeout=20000)
-        except PlaywrightTimeoutError:
-            logging.warning('%d조 doVerify() 응답 지연(>20s) — 20초 추가 대기', jo)
-            page.wait_for_selector('#ajax_loading', state='hidden', timeout=20000)
+
+        # doVerify() AJAX가 서버 지연/드롭으로 20초 넘게 #ajax_loading
+        # ("통신중입니다")를 안 지우는 경우 확인됨(2026-07-17 20시 KST).
+        # 같은 요청을 계속 기다리는 대신 doVerify() 자체를 최대 3회 재요청.
+        verified = False
+        last_err = None
+        for attempt in range(1, 4):
+            page.evaluate('doVerify()')
+            try:
+                page.wait_for_selector('#ajax_loading', state='hidden', timeout=15000)
+                verified = True
+                break
+            except PlaywrightTimeoutError as e:
+                last_err = e
+                logging.warning('%d조 doVerify() 응답 지연 (%d/3) — 재요청', jo, attempt)
+        if not verified:
+            raise RuntimeError(
+                f'{jo}조 doVerify() 3회 재시도 후에도 응답 없음 — dhlottery 서버 지연/차단 의심'
+            ) from last_err
+
         time.sleep(0.3)
         logging.info('%d조 번호 선택 완료', jo)
 
