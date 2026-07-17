@@ -235,7 +235,15 @@ def _purchase_mobile(page) -> list:
         page.evaluate('doAuto()')
         time.sleep(0.8)
         page.evaluate('doVerify()')
-        time.sleep(1.5)  # AJAX 완료 대기 (e2-micro)
+        # 고정 sleep 대신 #ajax_loading("통신중입니다") 사라질 때까지 대기.
+        # 2026-07-17 낮 시간대 수동 실행 시 서버 응답 지연으로 오버레이가
+        # 안 사라져 다음 조 클릭이 30초간 막히는 현상 확인 — 최대 40초까지 대기.
+        try:
+            page.wait_for_selector('#ajax_loading', state='hidden', timeout=20000)
+        except PlaywrightTimeoutError:
+            logging.warning('%d조 doVerify() 응답 지연(>20s) — 20초 추가 대기', jo)
+            page.wait_for_selector('#ajax_loading', state='hidden', timeout=20000)
+        time.sleep(0.3)
         logging.info('%d조 번호 선택 완료', jo)
 
     logging.info('번호 선택 완료 — 구매 진행')
