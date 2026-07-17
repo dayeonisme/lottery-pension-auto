@@ -78,6 +78,13 @@ def check_prize(ticket_group: int, ticket_numbers: str, win_group: int, win_numb
     return {'rank': 'no prize', 'prize': 0}
 
 
+def _prune_failure_screenshots(keep: int = 5):
+    """logs/failure_pension720_*.png 최신 keep개만 남기고 정리 (실패 진단용, 무한 누적 방지)."""
+    shots = sorted(LOG_PATH.parent.glob('failure_pension720_*.png'), key=lambda p: p.stat().st_mtime, reverse=True)
+    for shot in shots[keep:]:
+        shot.unlink(missing_ok=True)
+
+
 def _init_last_run():
     LAST_RUN_PATH.write_text(json.dumps(DEFAULT_LAST_RUN, indent=2, ensure_ascii=False))
 
@@ -428,6 +435,7 @@ def main():
 
     (ROOT / 'logs').mkdir(exist_ok=True)
     (ROOT / 'data').mkdir(exist_ok=True)
+    _prune_failure_screenshots()
     if not PURCHASES_PATH.exists():
         PURCHASES_PATH.write_text(json.dumps({'pension720': []}, indent=2, ensure_ascii=False))
 
