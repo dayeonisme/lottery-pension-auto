@@ -268,7 +268,8 @@ def purchase_tickets(page, count: int = 5) -> list:
     page.fill('#inpUserId', os.environ['DHLOTTERY_ID'])
     page.fill('#inpUserPswdEncn', os.environ['DHLOTTERY_PW'])
     page.click('#btnLogin')
-    page.wait_for_load_state('networkidle', timeout=30000)
+    # 로그인 후 랜딩 페이지도 백그라운드 요청이 지속돼 networkidle 미도달 가능 (2026-09-16 재현) → domcontentloaded 사용.
+    page.wait_for_load_state('domcontentloaded', timeout=30000)
 
     is_logged_in = '/login' not in page.url
     if not is_logged_in:
