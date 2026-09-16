@@ -275,9 +275,11 @@ def purchase_tickets(page, count: int = 5) -> list:
         raise RuntimeError('Login failed: check DHLOTTERY_ID/PW or CAPTCHA')
     logging.info('Login successful')
 
+    # GCP에서는 이 URL이 모바일(m.dhlottery.co.kr)로 리다이렉트되는 경우가 있으며, 모바일 페이지는
+    # 백그라운드 요청이 지속돼 networkidle에 도달하지 못함 → domcontentloaded 사용.
     page.goto(
         'https://el.dhlottery.co.kr/game/TotalGame.jsp?LottoId=LO40',
-        wait_until='networkidle', timeout=30000
+        wait_until='domcontentloaded', timeout=30000
     )
 
     if 'm.dhlottery.co.kr' in page.url:
