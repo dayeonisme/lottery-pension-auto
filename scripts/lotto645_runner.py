@@ -354,7 +354,8 @@ def purchase_tickets(page, count: int = 5) -> list:
     }""")
     if popup_msg:
         raise RuntimeError(f'Purchase blocked — site popup: {popup_msg}')
-    frame.wait_for_selector('#reportRow li', timeout=15000)
+    # e2-micro 대응: 구매 확인 후 리포트 렌더링이 느릴 수 있어 30초로 연장
+    frame.wait_for_selector('#reportRow li', timeout=30000)
 
     tickets = frame.evaluate("""() => {
         const items = document.querySelectorAll('#reportRow li');
