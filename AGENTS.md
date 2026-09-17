@@ -77,21 +77,23 @@ sudo -u ubuntu env $(sudo cat /etc/n8n/env | xargs) python3 /home/ubuntu/lottery
 ## Running scripts
 
 ```bash
-# Python 자동화 (테스트용 수동 실행)
-python scripts/lotto645_runner.py --dry-run   # STEP 1~2만 실행, 구매 없음
-python scripts/pension720_runner.py --dry-run
+# Python 자동화 (테스트용 수동 실행) — uv run이 venv 자동 사용
+uv run python scripts/lotto645_runner.py --dry-run   # STEP 1~2만 실행, 구매 없음
+uv run python scripts/pension720_runner.py --dry-run
 
-python scripts/lotto645_runner.py             # 전체 실행 (DHLOTTERY_ID/PW 필요)
-python scripts/pension720_runner.py
+uv run python scripts/lotto645_runner.py             # 전체 실행 (DHLOTTERY_ID/PW 필요)
+uv run python scripts/pension720_runner.py
 
 # 파이프라인 스모크 테스트 (브라우저/구매 없음)
-python scripts/test_runner.py           # exit 0
-python scripts/test_runner.py --fail    # exit 1
+uv run python scripts/test_runner.py           # exit 0
+uv run python scripts/test_runner.py --fail    # exit 1
 
-# 의존성 설치 (최초 1회)
-pip install -r requirements.txt
-playwright install chromium
+# 의존성 설치 (최초 1회) — pip/venv 수동 관리 불필요, uv가 pyproject.toml/uv.lock 기준으로 처리
+uv sync
+uv run playwright install chromium
 ```
+
+GCP 서버는 `/home/ubuntu/lottery_auto/.venv`를 uv로 관리. n8n 실행 커맨드도 `.venv/bin/python3`를 직접 호출(uv 자체는 실행 경로에 없어도 됨).
 
 Required environment variables: `DHLOTTERY_ID`, `DHLOTTERY_PW`
 

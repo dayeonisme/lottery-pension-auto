@@ -1,4 +1,0 @@
-playwright
-gspread
-google-auth
-pytest

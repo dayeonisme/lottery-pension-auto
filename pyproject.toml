@@ -1,0 +1,15 @@
+[project]
+name = "lottery-pension-auto"
+version = "0.1.0"
+description = "동행복권 로또6/45 · 연금복권720+ 자동구매/당첨확인"
+requires-python = ">=3.10"
+dependencies = [
+    "playwright",
+    "gspread",
+    "google-auth",
+]
+
+[dependency-groups]
+dev = [
+    "pytest",
+]

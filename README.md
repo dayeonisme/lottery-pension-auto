@@ -30,16 +30,17 @@ tests/
   test_pension720.py
 data/
 logs/
-requirements.txt
+pyproject.toml
+uv.lock
 ```
 
 ## 설치
 
-Python 의존성을 설치합니다.
+[uv](https://github.com/astral-sh/uv)로 Python 의존성을 설치합니다.
 
 ```bash
-pip3 install -r requirements.txt
-python3 -m playwright install chromium
+uv sync
+uv run playwright install chromium
 ```
 
 ## Google Sheets 인증 설정
@@ -85,28 +86,28 @@ export TELEGRAM_BOT_TOKEN="your_telegram_bot_token"
 브라우저 자동화 없이 흐름만 확인하려면 dry-run으로 실행합니다.
 
 ```bash
-python3 scripts/lotto645_runner.py --dry-run
-python3 scripts/pension720_runner.py --dry-run
+uv run python3 scripts/lotto645_runner.py --dry-run
+uv run python3 scripts/pension720_runner.py --dry-run
 ```
 
 실제 자동화를 실행합니다.
 
 ```bash
-python3 scripts/lotto645_runner.py
-python3 scripts/pension720_runner.py
+uv run python3 scripts/lotto645_runner.py
+uv run python3 scripts/pension720_runner.py
 ```
 
 n8n 명령 파이프라인만 간단히 확인하려면 다음 명령을 사용합니다.
 
 ```bash
-python3 scripts/test_runner.py
-python3 scripts/test_runner.py --fail
+uv run python3 scripts/test_runner.py
+uv run python3 scripts/test_runner.py --fail
 ```
 
 ## 테스트
 
 ```bash
-python3 -m pytest tests/
+uv run python3 -m pytest tests/
 ```
 
 ## n8n 예약 실행
