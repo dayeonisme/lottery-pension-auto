@@ -2,7 +2,7 @@
 
 Lotto 6/45와 연금복권 720+ 구매, 당첨 결과 확인, Google Sheets 기록, Telegram 알림을 자동화하는 Python 프로젝트입니다.
 
-이 저장소는 실행 가능한 자동화 코드를 정리한 공개용 저장소입니다. 개인 실행 데이터, 인증 정보, 로컬 로그는 포함하지 않습니다. `docs/`에는 과거 설계/마이그레이션 문서가 히스토리 참고용으로 남아 있습니다.
+이 저장소는 실행 가능한 자동화 코드를 정리한 공개용 저장소입니다. 개인 실행 데이터, 인증 정보, 로컬 로그는 포함하지 않습니다.
 
 ## 주요 기능
 
@@ -35,12 +35,11 @@ tests/
   test_lotto645.py
   test_pension720.py
   test_pre_commit_hook.py
-data/
-logs/
-docs/                                # 과거 설계/마이그레이션 문서 (참고용)
 pyproject.toml
 uv.lock
 ```
+
+`data/`, `logs/`는 저장소에 없고 최초 실행 시 스크립트가 자동으로 생성합니다.
 
 ## 설치
 
@@ -201,18 +200,6 @@ Run time: 2026-06-16 10:00
 
 Error: <에러 메시지>
 ```
-
-## 커밋하지 않는 파일
-
-아래 파일은 개인 실행 정보나 인증 정보를 포함할 수 있으므로 저장소에 커밋하지 않습니다.
-
-- `config/service_account.json`
-- `config/credentials.json`
-- `config/token.json`
-- `.env`
-- `data/*.json`
-- `logs/`
-- 스크린샷과 디버그 로그
 
 ## 주의사항
 
