@@ -355,8 +355,25 @@ def purchase_tickets(page, count: int = 5) -> list:
     }""")
     if popup_msg:
         raise RuntimeError(f'Purchase blocked — site popup: {popup_msg}')
+
     # e2-micro 대응: 구매 확인 후 리포트 렌더링이 느릴 수 있어 30초로 연장
-    frame.wait_for_selector('#reportRow li', timeout=30000)
+    from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
+    try:
+        frame.wait_for_selector('#reportRow li', timeout=30000)
+    except PlaywrightTimeoutError:
+        # 초기 popup_msg 스캔이 놓쳤을 수 있는 지연 에러 팝업(예: 예치금 부족) 재확인.
+        # #popupLayerAlert는 사이트가 구매 실패 사유를 표시하는 전용 레이어.
+        late_popup_msg = frame.evaluate("""() => {
+            const el = document.querySelector('#popupLayerAlert');
+            if (!el) return null;
+            const style = window.getComputedStyle(el);
+            if (style.display === 'none') return null;
+            const text = el.innerText.trim().replace(/\\s+/g, ' ');
+            return text.length > 5 ? text.substring(0, 300) : null;
+        }""")
+        if late_popup_msg:
+            raise RuntimeError(f'Purchase blocked — site popup: {late_popup_msg}') from None
+        raise
 
     tickets = frame.evaluate("""() => {
         const items = document.querySelectorAll('#reportRow li');
