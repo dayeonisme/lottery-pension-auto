@@ -61,6 +61,14 @@ def test_pre_commit_blocks_env_files(tmp_path: Path) -> None:
     assert "BLOCKED FILE" in result.stdout
 
 
+def test_pre_commit_allows_env_example(tmp_path: Path) -> None:
+    assert HOOK.exists()
+
+    result = _run_hook(tmp_path, "TOKEN=your_token\n", ".env.example")
+
+    assert result.returncode == 0
+
+
 def test_pre_commit_blocks_locally_configured_privacy_pattern(tmp_path: Path) -> None:
     repo = _init_repo(tmp_path, "probe.txt", "owner=local-sensitive-identity\n")
     subprocess.run(

@@ -19,7 +19,10 @@ check_staged_file() {
     fi
 }
 
-check_staged_file ".env contains credentials and must not be committed." '^\.env($|[.])'
+if printf '%s\n' "$STAGED" | grep -v '^\.env\.example$' | grep -qE '^\.env($|[.])'; then
+    red "BLOCKED FILE: .env contains credentials and must not be committed."
+    FAIL=1
+fi
 check_staged_file "credential JSON files must not be committed." '(^|/)(credentials|credentials_info|token|service_account)\.json$'
 check_staged_file "session/cookie files must not be committed." '(^sessions/|toss_session\.json$|naver_cookies\.json$)'
 check_staged_file "database files may contain personal data." '\.(db|sqlite|sqlite3)$'

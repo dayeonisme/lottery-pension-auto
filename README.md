@@ -2,7 +2,7 @@
 
 Lotto 6/45와 연금복권 720+ 구매, 당첨 결과 확인, Google Sheets 기록, Telegram 알림을 자동화하는 Python 프로젝트입니다.
 
-이 저장소는 실행 가능한 자동화 코드만 정리한 공개용 저장소입니다. 개인 실행 데이터, 인증 정보, 로컬 로그, 과거 작업 문서는 포함하지 않습니다.
+이 저장소는 실행 가능한 자동화 코드를 정리한 공개용 저장소입니다. 개인 실행 데이터, 인증 정보, 로컬 로그는 포함하지 않습니다. `docs/`에는 과거 설계/마이그레이션 문서가 히스토리 참고용으로 남아 있습니다.
 
 ## 주요 기능
 
@@ -18,6 +18,7 @@ Lotto 6/45와 연금복권 720+ 구매, 당첨 결과 확인, Google Sheets 기�
 
 ```text
 config/
+  mcp_config.json                   # MCP 서버 설정 참고용
   n8n_lotto645_workflow.json
   n8n_pension720_workflow.json
 scripts/
@@ -25,11 +26,18 @@ scripts/
   lotto645_runner.py
   pension720_runner.py
   test_runner.py
+  check_status.py                   # 마지막 실행 상태 요약 조회
+  check_mobile_url.py                # 모바일 구매 URL 리다이렉트 디버그
+  debug_purchase_page.py             # 구매 페이지 iframe/팝업 디버그
+  install-hooks.sh                   # pre-commit 훅 설치
+  pre-commit                         # 커밋 시 비밀정보/개인정보 스캔 훅
 tests/
   test_lotto645.py
   test_pension720.py
+  test_pre_commit_hook.py
 data/
 logs/
+docs/                                # 과거 설계/마이그레이션 문서 (참고용)
 pyproject.toml
 uv.lock
 ```
@@ -110,24 +118,30 @@ uv run python3 scripts/test_runner.py --fail
 uv run python3 -m pytest tests/
 ```
 
+## Git hooks
+
+`scripts/pre-commit`은 커밋 시 스테이징된 파일에서 비밀번호/토큰 등 민감정보와 개인 경로를 스캔해 커밋을 막습니다. 최초 1회 설치합니다.
+
+```bash
+scripts/install-hooks.sh
+```
+
 ## n8n 예약 실행
 
-n8n Code 노드에서 로컬 명령과 환경 변수에 접근할 수 있도록 실행합니다.
+n8n을 서버에 상시 서비스(systemd 등)로 띄워두고, 워크플로마다 **Schedule Trigger + Execute Command** 노드 두 개로 구성합니다. Execute Command 노드가 실행하는 커맨드 예시:
 
 ```bash
-NODE_FUNCTION_ALLOW_BUILTIN=child_process N8N_BLOCK_ENV_ACCESS_IN_NODE=false npx n8n
+export $(sudo cat /etc/n8n/env | xargs) && timeout 600 <repo-path>/.venv/bin/python3 <repo-path>/scripts/lotto645_runner.py
 ```
 
-n8n에서 아래 워크플로 템플릿을 import합니다.
+- `/etc/n8n/env`에 `DHLOTTERY_ID`/`DHLOTTERY_PW`/`GOOGLE_SPREADSHEET_ID`/`TELEGRAM_*` 등 환경 변수를 저장해두고 실행 시 로드합니다.
+- Python 실행파일은 `uv sync`로 만든 `.venv/bin/python3`를 직접 지정합니다(uv 자체가 PATH에 없어도 동작).
+- `timeout 600`은 스크립트 내부의 600초 alarm과 별개로 n8n 쪽에서도 강제 종료를 보장하기 위한 이중 안전장치입니다.
 
-- `config/n8n_lotto645_workflow.json`
-- `config/n8n_pension720_workflow.json`
+n8n에서 아래 워크플로 템플릿을 import한 뒤, Execute Command 노드의 커맨드에 있는 경로를 실제 배포 경로로 바꿉니다.
 
-워크플로를 실행하기 전에 `LOTTERY_AUTO_ROOT`를 이 저장소의 절대 경로로 설정합니다.
-
-```bash
-export LOTTERY_AUTO_ROOT="<repo-path>/lottery-pension-auto"
-```
+- `config/n8n_lotto645_workflow.json` (Schedule: 매주 월요일 10:00)
+- `config/n8n_pension720_workflow.json` (Schedule: 매주 금요일 10:00)
 
 ## Telegram 알림 포맷
 
