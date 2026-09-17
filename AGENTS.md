@@ -1,6 +1,6 @@
-# CLAUDE.md
+# AGENTS.md
 
-This file provides guidance to coding agents (Claude Code, Codex 등) when working with code in this repository. `AGENTS.md`는 이 파일을 가리키는 symlink — 단일 소스.
+This file provides guidance to coding agents (Claude Code, Codex 등) when working with code in this repository. `CLAUDE.md`는 이 파일을 가리키는 symlink — 단일 소스.
 
 ## What this project does
 
