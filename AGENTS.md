@@ -68,8 +68,9 @@ GCP SSH 세션에서는 heredoc(`<< 'EOF'`) 사용 시 터미널이 들여쓰기
 
 ```bash
 # 수동 실행 (ubuntu 유저 + 환경변수 한 번에) — data/ 파일이 ubuntu 소유(644)라 이 방식만 작동
-sudo -u ubuntu env $(sudo cat /etc/n8n/env | xargs) python3 /home/ubuntu/lottery_auto/scripts/pension720_runner.py
-sudo -u ubuntu env $(sudo cat /etc/n8n/env | xargs) python3 /home/ubuntu/lottery_auto/scripts/lotto645_runner.py
+# python3는 반드시 .venv/bin/python3 사용 (시스템 python3엔 의존성 없음)
+sudo -u ubuntu env $(sudo cat /etc/n8n/env | xargs) /home/ubuntu/lottery_auto/.venv/bin/python3 /home/ubuntu/lottery_auto/scripts/pension720_runner.py
+sudo -u ubuntu env $(sudo cat /etc/n8n/env | xargs) /home/ubuntu/lottery_auto/.venv/bin/python3 /home/ubuntu/lottery_auto/scripts/lotto645_runner.py
 ```
 
 > **주의**: `export $(...)` 후 별도 실행하면 `sudo -u ubuntu` 전환 시 환경변수가 전달되지 않아 `DHLOTTERY_ID/PW not set` 오류 발생.
