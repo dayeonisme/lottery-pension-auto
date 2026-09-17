@@ -138,12 +138,6 @@ Both runners follow the identical 4-step pattern: fetch → check → purchase �
 
 **KST dates**: All date calculations (`next_saturday`, `next_thursday`, `purchase_date`, `draw_confirmed_date`) use `datetime.now(timezone(timedelta(hours=9)))` for Korea Standard Time.
 
-## MCP servers
-
-Configured in `config/mcp_config.json` (reference only). The operative config written to `%APPDATA%\Claude\claude_desktop_config.json` uses `cmd /c npx` wrappers required on Windows:
-- **puppeteer**: headless Chrome automation
-- **gdrive**: Google Drive read/write (`GDRIVE_CREDENTIALS_PATH` → `config/credentials.json`)
-
 ## Google Sheets layout
 
 Single sheet named **`raw`**, columns A–K:

@@ -18,7 +18,6 @@ Lotto 6/45와 연금복권 720+ 구매, 당첨 결과 확인, Google Sheets 기�
 
 ```text
 config/
-  mcp_config.json                   # MCP 서버 설정 참고용
   n8n_lotto645_workflow.json
   n8n_pension720_workflow.json
 scripts/
