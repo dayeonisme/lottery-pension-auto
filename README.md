@@ -26,8 +26,6 @@ scripts/
   pension720_runner.py
   test_runner.py
   check_status.py                   # 마지막 실행 상태 요약 조회
-  check_mobile_url.py                # 모바일 구매 URL 리다이렉트 디버그
-  debug_purchase_page.py             # 구매 페이지 iframe/팝업 디버그
   install-hooks.sh                   # pre-commit 훅 설치
   pre-commit                         # 커밋 시 비밀정보/개인정보 스캔 훅
 tests/
