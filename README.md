@@ -138,6 +138,7 @@ n8n에서 아래 워크플로 템플릿을 import한 뒤, Execute Command 노드
 
 - `config/n8n_lotto645_workflow.json` (Schedule: 매주 월요일 10:00)
 - `config/n8n_pension720_workflow.json` (Schedule: 매주 금요일 10:00)
+- `config/n8n_monthly_report_workflow.json` (Schedule: 매월 1일 10:00) — `scripts/monthly_report.py`가 Sheets `raw` 시트를 집계해 지난달 구매 횟수·금액, 등수별 당첨 건수, 총 당첨금을 Telegram으로 발송 (`--month YYYY-MM`, `--dry-run` 지원)
 
 ## Telegram 알림 포맷
 

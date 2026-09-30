@@ -108,3 +108,9 @@ def append_purchase_rows(lottery_type: str, purchase_data: dict) -> None:
         ])
 
     ws.append_rows(rows, value_input_option=gspread.utils.ValueInputOption.raw)
+
+
+def fetch_raw_rows() -> list:
+    """raw 시트 전체 행(헤더 제외)을 리스트로 반환."""
+    ws = get_client().open_by_key(SPREADSHEET_ID).worksheet('raw')
+    return ws.get_all_values()[1:]
