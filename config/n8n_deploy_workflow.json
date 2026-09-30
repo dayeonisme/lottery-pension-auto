@@ -1,0 +1,42 @@
+{
+  "name": "deploy lottery_auto",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "trigger-deploy",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "command": "sudo -u ubuntu git -C /home/ubuntu/lottery_auto pull --ff-only && sudo -u ubuntu git -C /home/ubuntu/lottery_auto log -1 --oneline",
+        "executeOnce": true
+      },
+      "id": "exec-deploy",
+      "name": "Git Pull",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [460, 300]
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Git Pull",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": []
+}
