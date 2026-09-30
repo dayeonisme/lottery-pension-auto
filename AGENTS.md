@@ -145,3 +145,9 @@ Single sheet named **`raw`**, columns A–K:
 `lottery_type | purchase_datetime | round | ticket_no | numbers | purchase_amount | draw_date | result | prize_rank | prize_amount | draw_confirmed_date`
 
 `lottery_type` values: `로또6/45` / `연금복권720+` (Korean display names defined in `LOTTERY_DISPLAY_NAME` in google_sheets.py).
+
+## TODO / 인프라 메모
+
+- **GCP 프로젝트 분리 상태**: n8n이 돌아가는 서버(VM)가 속한 GCP 프로젝트와 Google Sheets 접근용 서비스 계정(`config/service_account.json`)이 속한 프로젝트가 서로 다르다. 동작에는 문제 없음(서비스 계정 키로 Sheets API 호출).
+- **추후 작업**: 서비스 계정/Sheets API를 n8n 서버가 있는 프로젝트로 통합. 통합 시 새 서비스 계정 키 발급 → 서버 `config/service_account.json` 교체 → 시트 공유 대상을 새 서비스 계정 이메일로 변경 → 이전 키 폐기.
+- 프로젝트 ID, 계정 이메일, IP 등 식별 정보는 저장소에 기록하지 않는다(로컬 메모/비밀번호 관리자에 보관).
