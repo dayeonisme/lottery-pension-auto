@@ -2,12 +2,25 @@
   "name": "deploy lottery_auto",
   "nodes": [
     {
-      "parameters": {},
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "deploy-lottery-auto",
+        "authentication": "headerAuth",
+        "responseMode": "lastNode",
+        "options": {}
+      },
       "id": "trigger-deploy",
-      "name": "Manual Trigger",
-      "type": "n8n-nodes-base.manualTrigger",
-      "typeVersion": 1,
-      "position": [240, 300]
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "deploy-lottery-auto",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "",
+          "name": "deploy-token"
+        }
+      }
     },
     {
       "parameters": {
@@ -22,7 +35,7 @@
     }
   ],
   "connections": {
-    "Manual Trigger": {
+    "Webhook": {
       "main": [
         [
           {
