@@ -98,6 +98,8 @@ GCP 서버는 `/home/ubuntu/lottery_auto/.venv`를 uv로 관리. n8n 실행 커�
 
 Required environment variables: `DHLOTTERY_ID`, `DHLOTTERY_PW`
 
+**Browser resource blocking** (`scripts/browser_lite.py`): 두 runner 모두 font/media 요청 차단, 조회 전용 페이지(www 메인/당첨결과)의 이미지만 1px로 대체. 로그인·구매 페이지 이미지는 건드리지 않음(이미지형 버튼 클릭 불가 방지). 문제 시 `/etc/n8n/env`에 `BROWSER_LITE=0` 추가로 배포 없이 비활성화.
+
 ## Architecture
 
 ```
