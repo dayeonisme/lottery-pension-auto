@@ -10,7 +10,9 @@ Automates weekly Dong-Haeng Lottery ticket purchases and prize checking:
 
 Each run: (1) fetches latest winning numbers via Playwright, (2) checks prizes for last week's unchecked tickets, (3) purchases 5 new auto-number tickets, (4) logs results to Google Sheets.
 
-Triggered by n8n workflows (Docker). On success/failure, n8n sends a Telegram notification.
+Triggered by n8n workflows (systemd 서비스, Docker 아님). 각 runner가 성공/실패 시 Telegram 알림을 직접 발송(`send_telegram()`).
+
+추가로 매월 1일 10:00 월간 결산, 분기 시작일(1·4·7·10월 1일) 10:00 분기 결산을 Telegram으로 발송한다(아래 **Settlement reports** 참고).
 
 ## 자동화 상태 확인
 
@@ -44,6 +46,13 @@ journalctl -u n8n --since "1 hour ago"
 ```
 
 ## GCP 서버 GitHub 배포
+
+**기본: 웹훅 배포** — `main` 머지 후 내 PC에서 `deploy-lottery` 실행. n8n `deploy lottery_auto` 워크플로(`config/n8n_deploy_workflow.json`)가 서버에서 `git pull --ff-only`를 실행하고 최신 커밋을 응답으로 돌려준다.
+- `deploy-lottery`는 내 PC `~/.zshrc`의 셸 함수. `X-Deploy-Token` 헤더 토큰은 macOS 키체인(`lottery-deploy-token`)에서 읽는다 — 토큰은 저장소/채팅에 두지 않는다.
+- 응답 JSON의 `exitCode: 0`이면 성공. `stderr`의 `From github.com...`은 git 진행 메시지(오류 아님).
+- n8n 포트(5678)는 방화벽에서 내 IP만 허용 → 응답이 없으면 IP 변경 여부 확인 후 `scripts/gcp_firewall.sh`로 갱신.
+
+**수동 배포** (웹훅 불가 시, 서버 SSH):
 
 **GCP remote는 SSH로 설정됨** — HTTPS로 절대 변경하지 말 것.
 
@@ -100,10 +109,28 @@ Required environment variables: `DHLOTTERY_ID`, `DHLOTTERY_PW`
 
 **Browser resource blocking** (`scripts/browser_lite.py`): 두 runner 모두 font/media 요청 차단, 조회 전용 페이지(www 메인/당첨결과)의 이미지만 1px로 대체. 로그인·구매 페이지 이미지는 건드리지 않음(이미지형 버튼 클릭 불가 방지). 문제 시 `/etc/n8n/env`에 `BROWSER_LITE=0` 추가로 배포 없이 비활성화.
 
+## Settlement reports
+
+`scripts/monthly_report.py` — `raw` 시트를 읽어 결산 메시지를 Telegram으로 발송 (구매·브라우저 없음).
+- 집계 기준: 구매 횟수/장수/금액은 `purchase_datetime`(B), 당첨 건수·등수·당첨금은 `draw_confirmed_date`(K). 월말 구매분 당첨은 확인된 달의 결산에 포함되어 누락 없음.
+- 로또 1~3등, 연금 1·2등·보너스는 시트 당첨금이 `-`라 합계에서 빠짐(수동 확인 대상).
+
+| 워크플로 | 스케줄 (KST, `GENERIC_TIMEZONE=Asia/Seoul`) | 커맨드 |
+|---|---|---|
+| `monthly report` | 매월 1일 10:00 — 지난달 | `monthly_report.py` |
+| `quarterly report` | 1·4·7·10월 1일 10:00 — 직전 분기 | `monthly_report.py --quarterly` |
+
+```bash
+uv run python scripts/monthly_report.py --dry-run               # 지난달, 발송 없이 출력
+uv run python scripts/monthly_report.py --month 2026-08 --dry-run
+uv run python scripts/monthly_report.py --quarterly --dry-run   # 직전 분기
+uv run python scripts/monthly_report.py --quarter 2026-Q3 --dry-run
+```
+
 ## Architecture
 
 ```
-n8n (Docker) ──schedules──▶ python scripts/{runner}.py ──▶ Telegram notification
+n8n (systemd) ─schedules──▶ python scripts/{runner}.py ──▶ Telegram notification
                                     │
               ┌─────────────────────┤
               ▼                     ▼
@@ -111,12 +138,13 @@ n8n (Docker) ──schedules──▶ python scripts/{runner}.py ──▶ Teleg
       (Chromium headless)   (service account auth)
               │                     │
         dhlottery.co.kr       Google Sheets
-                               [SPREADSHEET_ID in google_sheets.py]
+                               [GOOGLE_SPREADSHEET_ID env]
 ```
 
-**scripts/google_sheets.py** — shared module required by both runners. Manages service account auth (reads `config/service_account.json`), exposes two functions:
+**scripts/google_sheets.py** — shared module required by both runners. Manages service account auth (reads `config/service_account.json`), exposes:
 - `update_prize_results(lottery_type, round, ticket_results)` — finds rows by lottery type + round in `raw` sheet, batch-updates columns H–K
 - `append_purchase_rows(lottery_type, purchase_data)` — appends 5 new rows to `raw` sheet
+- `fetch_raw_rows()` — returns all `raw` rows (header excluded); used by `monthly_report.py`
 
 Both runners follow the identical 4-step pattern: fetch → check → purchase → Sheets.
 

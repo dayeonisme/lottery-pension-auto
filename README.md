@@ -11,7 +11,9 @@ Lotto 6/45와 연금복권 720+ 구매, 당첨 결과 확인, Google Sheets 기�
 - 당첨 결과 파싱
 - Google Sheets 결과 기록
 - Telegram 성공/실패 알림
+- 월간·분기 결산 Telegram 알림 (구매 횟수·금액, 등수별 당첨, 총 당첨금)
 - 예약 실행을 위한 n8n 워크플로 템플릿
+- 토큰 인증 웹훅으로 서버 배포
 - 복권 결과 파싱과 당첨 로직 테스트
 
 ## 프로젝트 구조
@@ -20,10 +22,18 @@ Lotto 6/45와 연금복권 720+ 구매, 당첨 결과 확인, Google Sheets 기�
 config/
   n8n_lotto645_workflow.json
   n8n_pension720_workflow.json
+  n8n_monthly_report_workflow.json   # 월간 결산 (매월 1일)
+  n8n_quarterly_report_workflow.json # 분기 결산 (1·4·7·10월 1일)
+  n8n_deploy_workflow.json           # 웹훅 배포 (git pull)
 scripts/
   google_sheets.py
   lotto645_runner.py
   pension720_runner.py
+  monthly_report.py                  # 월간/분기 결산 Telegram 발송
+  browser_lite.py                    # Playwright 리소스 차단(경량화)
+  gcp_firewall.sh                    # [내 PC] GCP 방화벽을 내 IP로 제한
+  gcp_service_account.sh             # [내 PC] Sheets용 서비스 계정·키 발급
+  server_setup.sh                    # [서버] n8n 워크플로·배포 토큰 설정
   test_runner.py
   check_status.py                   # 마지막 실행 상태 요약 조회
   install-hooks.sh                   # pre-commit 훅 설치
@@ -31,6 +41,7 @@ scripts/
 tests/
   test_lotto645.py
   test_pension720.py
+  test_monthly_report.py
   test_pre_commit_hook.py
 pyproject.toml
 uv.lock
@@ -82,6 +93,7 @@ export TELEGRAM_BOT_TOKEN="your_telegram_bot_token"
 | `DHLOTTERY_PW` | ✅ | 동행복권 로그인 비밀번호 |
 | `TELEGRAM_BOT_TOKEN` | ⬜ | 알림을 보낼 Telegram 봇 토큰. BotFather에서 발급. 미설정 시 알림만 생략, 자동화는 정상 실행 |
 | `TELEGRAM_CHAT_ID` | ⬜ | 알림을 받을 채팅(또는 채널)의 ID. `BOT_TOKEN`과 한 쌍으로 동작 |
+| `BROWSER_LITE` | ⬜ | 기본 `1`. `0`이면 Playwright 리소스 차단(`browser_lite.py`)을 끔. 구매 페이지 동작에 문제가 있을 때 배포 없이 롤백용 |
 
 실제 계정 정보, Telegram 토큰, Google 인증 파일은 GitHub에 커밋하지 마세요.
 
@@ -107,6 +119,19 @@ n8n 명령 파이프라인만 간단히 확인하려면 다음 명령을 사용�
 uv run python3 scripts/test_runner.py
 uv run python3 scripts/test_runner.py --fail
 ```
+
+결산 메시지를 발송 없이 확인합니다(시트 읽기만, 브라우저/구매 없음).
+
+```bash
+uv run python3 scripts/monthly_report.py --dry-run                # 지난달
+uv run python3 scripts/monthly_report.py --month 2026-08 --dry-run
+uv run python3 scripts/monthly_report.py --quarterly --dry-run    # 직전 분기
+uv run python3 scripts/monthly_report.py --quarter 2026-Q3 --dry-run
+```
+
+### 브라우저 경량화
+
+두 runner는 `scripts/browser_lite.py`로 폰트·미디어 요청을 차단하고, 조회 전용 페이지(메인/당첨결과)의 이미지만 1px로 대체합니다. 로그인·구매 페이지의 이미지는 이미지형 버튼 클릭을 위해 그대로 둡니다. Chromium은 `--renderer-process-limit=1`로 실행됩니다.
 
 ## 테스트
 
@@ -144,6 +169,42 @@ n8n에서 아래 워크플로 템플릿을 import한 뒤, Execute Command 노드
   ```bash
   curl -X POST https://<n8n주소>/webhook/deploy-lottery-auto -H "X-Deploy-Token: $DEPLOY_TOKEN"
   ```
+
+n8n 스케줄 시각은 n8n의 `GENERIC_TIMEZONE`을 따릅니다. 한국 시간으로 돌리려면 `/etc/n8n/env`에 `GENERIC_TIMEZONE=Asia/Seoul`을 설정하세요.
+
+## 배포
+
+`main`에 머지한 뒤 배포 웹훅을 호출하면 서버가 `git pull --ff-only`를 실행하고 최신 커밋을 응답으로 돌려줍니다. 응답 JSON의 `exitCode`가 `0`이면 성공이며, `stderr`의 `From github.com...`은 git 진행 메시지입니다.
+
+토큰은 셸 프로필에 평문으로 두지 말고 OS 키체인 등에 보관합니다. macOS 예시:
+
+```bash
+# 저장 (프롬프트로 입력 → 셸 히스토리에 남지 않음)
+security add-generic-password -a "$USER" -s lottery-deploy-token -U -w
+
+# ~/.zshrc
+deploy-lottery() {
+  local token
+  token="$(security find-generic-password -s lottery-deploy-token -w)" || return 1
+  curl -sS -X POST http://<n8n주소>:5678/webhook/deploy-lottery-auto -H "X-Deploy-Token: $token"
+  echo
+}
+```
+
+## 서버 보안·인프라 스크립트 (GCP)
+
+| 스크립트 | 실행 위치 | 역할 |
+|---|---|---|
+| `scripts/gcp_firewall.sh` | 내 PC (gcloud) | n8n(5678)·SSH(22) 인그레스를 내 공인 IP(+콘솔 브라우저 SSH 대역)로 제한. IP가 바뀌면 재실행 |
+| `scripts/server_setup.sh <서버IP>` | 서버 | `git pull`, `WEBHOOK_URL` 설정, n8n 서비스 유저로 워크플로·배포 토큰 credential import, 배포 워크플로 활성화 |
+| `scripts/gcp_service_account.sh` | 내 PC (gcloud) | 서버 프로젝트에 Sheets/Drive API 활성화, 서비스 계정 생성, 키를 저장소 밖(`~/lottery_sa_key.json`)에 발급 |
+
+```bash
+PROJECT_ID=<프로젝트ID> bash scripts/gcp_firewall.sh
+PROJECT_ID=<프로젝트ID> bash scripts/gcp_service_account.sh
+```
+
+프로젝트 ID, 서버 IP, 계정 이메일, 토큰, 키 파일은 저장소에 기록하지 마세요.
 
 ## Telegram 알림 포맷
 
@@ -191,6 +252,31 @@ Lotto 6/45:
 ```
 
 1등·2등·3등(연금복권은 1등·2등·보너스) 당첨 시 해당 줄에 `⚠️수동확인`이 붙고, 로그에 `HIGH RANK WIN`이 기록됩니다.
+
+### 결산 알림
+
+`monthly_report.py`가 보내는 월간/분기 결산입니다. 구매는 구매일 기준, 당첨은 당첨 확인일 기준으로 집계합니다(월말 구매분의 당첨은 확인된 달에 포함).
+
+```text
+📊 2026년 6월 결산
+
+🎱 로또6/45
+  구매: 4회 (20장) / 20,000원
+  당첨: 1건
+    - 5등: 1건
+  당첨금: 5,000원
+
+🎫 연금복권720+
+  구매: 4회 (20장) / 20,000원
+  당첨: 2건
+    - 6등: 1건
+    - 7등: 1건
+  당첨금: 6,000원
+
+💰 총 구매 40,000원 / 총 당첨 11,000원 / 손익 -29,000원
+```
+
+분기 결산은 제목만 `📊 2026년 2분기 결산` 형태이고 나머지 형식은 같습니다. 로또 1~3등, 연금 1·2등·보너스는 시트 당첨금이 `-`로 기록되어 합계에서 빠집니다.
 
 ### 실패 알림
 
