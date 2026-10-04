@@ -24,6 +24,7 @@ LOCK_PATH = ROOT / 'data' / 'pension720.lock'
 
 sys.path.insert(0, str(Path(__file__).parent))
 from google_sheets import update_prize_results, append_purchase_rows
+from browser_lite import apply_resource_blocking
 
 USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36'
 KST = timezone(timedelta(hours=9))
@@ -520,6 +521,8 @@ def main():
                     '--disable-gpu',
                     '--disable-software-rasterizer',
                     '--disable-extensions',
+                    '--disable-background-networking',
+                    '--renderer-process-limit=1',
                 ]
             )
             try:
@@ -529,6 +532,7 @@ def main():
                     viewport={'width': 1280, 'height': 720},
                     is_mobile=False,
                 )
+                apply_resource_blocking(context)
                 page = context.new_page()
 
                 logging.info('STEP 1: Fetching winning numbers...')
