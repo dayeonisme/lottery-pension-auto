@@ -3,7 +3,8 @@ from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / 'scripts'))
-from monthly_report import previous_month, summarize, format_report, KST
+from monthly_report import (previous_month, previous_quarter, quarter_months, month_title,
+                            quarter_title, summarize, format_report, KST)
 
 
 def row(t, dt, no, result, rank='-', prize='-', confirmed='-'):
@@ -25,7 +26,7 @@ def test_summarize_and_format():
     assert s['로또6/45']['tickets'] == 5 and s['로또6/45']['sessions'] == 1
     assert s['로또6/45']['prize'] == 5000 and s['로또6/45']['ranks'] == {'5등': 1}
     assert s['연금복권720+']['ranks'] == {'7등': 2} and s['연금복권720+']['prize'] == 2000
-    msg = format_report('2026-08', s)
+    msg = format_report(month_title('2026-08'), s)
     assert '2026년 8월 결산' in msg and '7,000원' in msg and '5등: 1건' in msg
 
 
@@ -36,3 +37,22 @@ def test_month_end_purchase_win_counted_in_next_month():
     assert sep['로또6/45']['tickets'] == 1 and sep['로또6/45']['prize'] == 0
     assert oct_['로또6/45']['tickets'] == 0 and oct_['로또6/45']['ranks'] == {'5등': 1}
     assert oct_['로또6/45']['prize'] == 5000
+
+
+def test_previous_quarter():
+    assert previous_quarter(datetime(2026, 1, 1, 10, tzinfo=KST)) == '2025-Q4'
+    assert previous_quarter(datetime(2026, 4, 1, 10, tzinfo=KST)) == '2026-Q1'
+    assert previous_quarter(datetime(2026, 10, 1, 10, tzinfo=KST)) == '2026-Q3'
+    assert quarter_months('2025-Q4') == ('2025-10', '2025-11', '2025-12')
+
+
+def test_quarter_summary():
+    rows = [
+        row('로또6/45', '2026-06-29 10:00:00', 1, 'win', '5등', '5000', '2026-07-06'),  # Q2 구매, Q3 당첨
+        row('로또6/45', '2026-07-06 10:00:00', 1, 'no prize', confirmed='2026-07-13'),
+        row('연금복권720+', '2026-09-25 10:00:00', 1, 'win', '7등', '1000', '2026-10-02'),  # Q3 구매, Q4 당첨
+    ]
+    s = summarize(rows, quarter_months('2026-Q3'))
+    assert s['로또6/45']['tickets'] == 1 and s['로또6/45']['prize'] == 5000
+    assert s['연금복권720+']['tickets'] == 1 and s['연금복권720+']['prize'] == 0
+    assert '2026년 3분기 결산' in format_report(quarter_title('2026-Q3'), s)
