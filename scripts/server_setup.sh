@@ -25,8 +25,9 @@ n8n_cli() { sudo -u "$N8N_USER" env HOME="$N8N_HOME" $(sudo cat "$ENV_FILE" | xa
 
 # 배포 토큰: 신규 생성하여 credential 로 import (토큰은 한 번만 출력)
 TOKEN="$(openssl rand -hex 32)"
-CRED_TMP="$(mktemp)"; trap 'rm -f "$CRED_TMP"' EXIT
-cat > "$CRED_TMP" <<JSON
+# 임시 파일은 CLI 실행 유저 소유로 만들어야 읽을 수 있다(권한 600 유지, 토큰 노출 방지).
+CRED_TMP="$(sudo -u "$N8N_USER" mktemp)"; trap 'sudo -u "$N8N_USER" rm -f "$CRED_TMP"' EXIT
+sudo -u "$N8N_USER" tee "$CRED_TMP" >/dev/null <<JSON
 [{"id":"deploytoken01","name":"deploy-token","type":"httpHeaderAuth",
   "data":{"name":"X-Deploy-Token","value":"$TOKEN"}}]
 JSON
