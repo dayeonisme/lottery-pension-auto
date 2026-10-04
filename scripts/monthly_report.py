@@ -90,8 +90,7 @@ def format_report(month: str, summary: dict) -> str:
         else:
             lines.append('  당첨: 0건')
         lines.append(f'  당첨금: {s["prize"]:,}원')
-    lines += ['', f'💰 총 구매 {total_amount:,}원 / 총 당첨 {total_prize:,}원 / 손익 {total_prize - total_amount:+,}원',
-              '※ 당첨은 당첨 확인일 기준 집계. 상위 등수(로또 1~3등, 연금 1·2등·보너스) 당첨금은 시트에 미기록 시 합계에서 제외']
+    lines += ['', f'💰 총 구매 {total_amount:,}원 / 총 당첨 {total_prize:,}원 / 손익 {total_prize - total_amount:+,}원']
     return '\n'.join(lines)
 
 
