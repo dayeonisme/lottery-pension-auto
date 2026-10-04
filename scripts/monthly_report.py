@@ -48,21 +48,24 @@ def _to_int(v) -> int:
 
 
 def summarize(rows: list, month: str) -> dict:
-    """rows: raw 시트 행(A~K). purchase_datetime(B)이 month(YYYY-MM)인 행만 집계."""
+    """rows: raw 시트 행(A~K).
+    구매/미추첨은 purchase_datetime(B) 기준, 당첨은 draw_confirmed_date(K) 기준으로 month(YYYY-MM) 집계.
+    → 월말 구매분이 다음 달에 당첨 확인되면 다음 달 결산에 포함되어 누락이 없다."""
     out = {name: {'sessions': set(), 'tickets': 0, 'amount': 0, 'pending': 0, 'ranks': {}, 'prize': 0}
            for name, _ in LOTTERY_ORDER}
     for row in rows:
         row = list(row) + [''] * (11 - len(row))
-        name, purchased = row[0], row[1]
-        if name not in out or not purchased.startswith(month):
+        name, purchased, result, confirmed = row[0], row[1], row[7], row[10]
+        if name not in out:
             continue
         s = out[name]
-        s['sessions'].add(purchased)
-        s['tickets'] += 1
-        s['amount'] += _to_int(row[5])
-        if row[7] == 'pending':
-            s['pending'] += 1
-        elif row[7] == 'win':
+        if purchased.startswith(month):
+            s['sessions'].add(purchased)
+            s['tickets'] += 1
+            s['amount'] += _to_int(row[5])
+            if result == 'pending':
+                s['pending'] += 1
+        if result == 'win' and confirmed.startswith(month):
             rank = row[8]
             s['ranks'][rank] = s['ranks'].get(rank, 0) + 1
             s['prize'] += _to_int(row[9])
@@ -92,7 +95,7 @@ def format_report(month: str, summary: dict) -> str:
         if s['pending']:
             lines.append(f'  ⏳ 미추첨 {s["pending"]}장 (다음 달 반영)')
     lines += ['', f'💰 총 구매 {total_amount:,}원 / 총 당첨 {total_prize:,}원 / 손익 {total_prize - total_amount:+,}원',
-              '※ 상위 등수(로또 1~3등, 연금 1·2등·보너스) 당첨금은 시트에 미기록 시 합계에서 제외']
+              '※ 당첨은 당첨 확인일 기준 집계. 상위 등수(로또 1~3등, 연금 1·2등·보너스) 당첨금은 시트에 미기록 시 합계에서 제외']
     return '\n'.join(lines)
 
 
