@@ -21,7 +21,15 @@ gcloud iam service-accounts describe "$SA_EMAIL" --project "$PROJECT_ID" >/dev/n
        --display-name "lottery auto Google Sheets"
 
 [[ -e "$KEY_PATH" ]] && { echo "$KEY_PATH 이미 존재 — 덮어쓰지 않음. 옮기거나 삭제 후 재실행"; exit 1; }
-(umask 077; gcloud iam service-accounts keys create "$KEY_PATH" --iam-account "$SA_EMAIL" --project "$PROJECT_ID")
+# 서비스 계정 생성 직후엔 전파 지연으로 NOT_FOUND가 날 수 있어 재시도한다.
+for i in 1 2 3 4 5 6; do
+  if (umask 077; gcloud iam service-accounts keys create "$KEY_PATH" --iam-account "$SA_EMAIL" --project "$PROJECT_ID"); then
+    break
+  fi
+  rm -f "$KEY_PATH"
+  [[ $i -eq 6 ]] && { echo "키 발급 실패 — 잠시 후 다시 실행"; exit 1; }
+  echo "서비스 계정 전파 대기 중... (${i}/5)"; sleep 10
+done
 
 echo
 echo "== 완료 =="
