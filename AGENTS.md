@@ -150,7 +150,7 @@ Single sheet named **`raw`**, columns A–K:
 
 ## TODO / 인프라 메모
 
-- **GCP 프로젝트 분리 상태**: n8n이 돌아가는 서버(VM)가 속한 GCP 프로젝트와 Google Sheets 접근용 서비스 계정(`config/service_account.json`)이 속한 프로젝트가 서로 다르다. 동작에는 문제 없음(서비스 계정 키로 Sheets API 호출).
-- **추후 작업**: 서비스 계정/Sheets API를 n8n 서버가 있는 프로젝트로 통합. 신규 서비스 계정·키 발급은 `scripts/gcp_service_account.sh`(내 PC, gcloud). 통합 시 새 서비스 계정 키 발급 → 서버 `config/service_account.json` 교체 → 시트 공유 대상을 새 서비스 계정 이메일로 변경 → 이전 키 폐기.
+- **서비스 계정 통합 (2026-10-04)**: Sheets 접근용 서비스 계정을 n8n 서버와 같은 GCP 프로젝트의 신규 계정으로 교체 완료(`scripts/gcp_service_account.sh`로 발급, 서버 `config/service_account.json` 교체, 시트 편집자 공유). 이전 키는 서버에 `config/service_account.json.old`로 백업.
+- **남은 정리 (1~2주 정상 동작 확인 후)**: 이전 프로젝트의 기존 서비스 계정 키 삭제/계정 사용 중지 → 시트 공유 목록에서 기존 서비스 계정 제거 → 서버 `service_account.json.old` 삭제.
 - 프로젝트 ID, 계정 이메일, IP 등 식별 정보는 저장소에 기록하지 않는다(로컬 메모/비밀번호 관리자에 보관).
 - 인프라 설정 스크립트: `scripts/gcp_firewall.sh`(내 PC, gcloud — 방화벽 내 IP 제한), `scripts/server_setup.sh <IP>`(서버 — pull, WEBHOOK_URL, n8n CLI로 워크플로/배포 토큰 credential import, 배포 워크플로 활성화). 월간 결산 워크플로는 dry-run 확인 후 수동 활성화.
