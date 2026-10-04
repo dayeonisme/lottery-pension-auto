@@ -2,7 +2,8 @@
 """
 monthly_report.py
 매월 1일 실행: 지난달(KST) 구매/당첨 결산을 Google Sheets raw 시트에서 집계해 Telegram으로 발송.
-Usage: monthly_report.py [--month YYYY-MM] [--dry-run]
+--quarterly: 분기 시작일 실행, 직전 분기(3개월) 결산.
+Usage: monthly_report.py [--month YYYY-MM | --quarterly [--quarter YYYY-Qn]] [--dry-run]
 """
 
 import re
@@ -42,14 +43,25 @@ def previous_month(now: datetime) -> str:
     return (first - timedelta(days=1)).strftime('%Y-%m')
 
 
+def previous_quarter(now: datetime) -> str:
+    q = (now.month - 1) // 3  # 이번 분기 index(0~3) → 직전 분기
+    return f'{now.year - 1}-Q4' if q == 0 else f'{now.year}-Q{q}'
+
+
+def quarter_months(quarter: str) -> tuple:
+    y, q = quarter.split('-Q')
+    start = (int(q) - 1) * 3 + 1
+    return tuple(f'{y}-{m:02d}' for m in range(start, start + 3))
+
+
 def _to_int(v) -> int:
     s = re.sub(r'[^\d]', '', str(v))
     return int(s) if s else 0
 
 
-def summarize(rows: list, month: str) -> dict:
-    """rows: raw 시트 행(A~K).
-    구매는 purchase_datetime(B) 기준, 당첨은 draw_confirmed_date(K) 기준으로 month(YYYY-MM) 집계.
+def summarize(rows: list, months) -> dict:
+    """rows: raw 시트 행(A~K). months: 'YYYY-MM' 또는 그 tuple(분기).
+    구매는 purchase_datetime(B) 기준, 당첨은 draw_confirmed_date(K) 기준으로 집계.
     → 월말 구매분이 다음 달에 당첨 확인되면 다음 달 결산에 포함되어 누락이 없다."""
     out = {name: {'sessions': set(), 'tickets': 0, 'amount': 0, 'ranks': {}, 'prize': 0}
            for name, _ in LOTTERY_ORDER}
@@ -59,11 +71,11 @@ def summarize(rows: list, month: str) -> dict:
         if name not in out:
             continue
         s = out[name]
-        if purchased.startswith(month):
+        if purchased.startswith(months):
             s['sessions'].add(purchased)
             s['tickets'] += 1
             s['amount'] += _to_int(row[5])
-        if result == 'win' and confirmed.startswith(month):
+        if result == 'win' and confirmed.startswith(months):
             rank = row[8]
             s['ranks'][rank] = s['ranks'].get(rank, 0) + 1
             s['prize'] += _to_int(row[9])
@@ -72,9 +84,18 @@ def summarize(rows: list, month: str) -> dict:
     return out
 
 
-def format_report(month: str, summary: dict) -> str:
+def month_title(month: str) -> str:
     y, m = month.split('-')
-    lines = [f'📊 {y}년 {int(m)}월 결산']
+    return f'{y}년 {int(m)}월'
+
+
+def quarter_title(quarter: str) -> str:
+    y, q = quarter.split('-Q')
+    return f'{y}년 {q}분기'
+
+
+def format_report(title: str, summary: dict) -> str:
+    lines = [f'📊 {title} 결산']
     total_amount = total_prize = 0
     for name, icon in LOTTERY_ORDER:
         s = summary[name]
@@ -97,13 +118,21 @@ def format_report(month: str, summary: dict) -> str:
 def main():
     p = argparse.ArgumentParser()
     p.add_argument('--month', help='집계 대상 월 YYYY-MM (기본: 지난달)')
+    p.add_argument('--quarterly', action='store_true', help='분기 결산 (기본: 직전 분기)')
+    p.add_argument('--quarter', help='집계 대상 분기 YYYY-Qn (--quarterly 와 함께)')
     p.add_argument('--dry-run', action='store_true', help='Telegram 발송 없이 출력만')
     args = p.parse_args()
     logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
 
-    month = args.month or previous_month(datetime.now(KST))
+    now = datetime.now(KST)
+    if args.quarterly or args.quarter:
+        quarter = args.quarter or previous_quarter(now)
+        title, months = quarter_title(quarter), quarter_months(quarter)
+    else:
+        month = args.month or previous_month(now)
+        title, months = month_title(month), month
     from google_sheets import fetch_raw_rows
-    message = format_report(month, summarize(fetch_raw_rows(), month))
+    message = format_report(title, summarize(fetch_raw_rows(), months))
     print(message)
     if not args.dry_run:
         send_telegram(message)

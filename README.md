@@ -139,6 +139,7 @@ n8n에서 아래 워크플로 템플릿을 import한 뒤, Execute Command 노드
 - `config/n8n_lotto645_workflow.json` (Schedule: 매주 월요일 10:00)
 - `config/n8n_pension720_workflow.json` (Schedule: 매주 금요일 10:00)
 - `config/n8n_monthly_report_workflow.json` (Schedule: 매월 1일 10:00) — `scripts/monthly_report.py`가 Sheets `raw` 시트를 집계해 지난달 구매 횟수·금액, 등수별 당첨 건수, 총 당첨금을 Telegram으로 발송 (`--month YYYY-MM`, `--dry-run` 지원)
+- `config/n8n_quarterly_report_workflow.json` (Schedule: 1·4·7·10월 1일 10:00) — `monthly_report.py --quarterly`로 직전 분기 결산 발송 (`--quarter YYYY-Qn` 지원)
 - `config/n8n_deploy_workflow.json` (Webhook, POST `/webhook/deploy-lottery-auto`) — 호출 시 서버에서 `git pull --ff-only` 후 최신 커밋을 응답으로 반환. import 후 n8n Credentials에서 **Header Auth**(name: `X-Deploy-Token`, value: 임의의 긴 랜덤 문자열)를 `deploy-token`으로 만들어 Webhook 노드에 연결하고 워크플로를 Active로 켠다. 토큰은 저장소에 커밋하지 않는다.
   ```bash
   curl -X POST https://<n8n주소>/webhook/deploy-lottery-auto -H "X-Deploy-Token: $DEPLOY_TOKEN"
