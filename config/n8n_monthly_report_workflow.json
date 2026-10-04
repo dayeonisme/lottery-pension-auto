@@ -57,5 +57,6 @@
     "saveExecutionProgress": true
   },
   "staticData": null,
-  "tags": []
+  "tags": [],
+  "active": false
 }

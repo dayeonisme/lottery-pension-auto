@@ -13,8 +13,15 @@ sudo -u ubuntu git -C "$REPO" pull --ff-only
 grep -q '^WEBHOOK_URL=' <(sudo cat "$ENV_FILE") \
   || echo "WEBHOOK_URL=http://$IP:5678/" | sudo tee -a "$ENV_FILE" >/dev/null
 
-# n8n CLI는 서비스와 같은 환경변수(DB/암호화 키 위치)로 실행해야 한다.
-n8n_cli() { sudo env $(sudo cat "$ENV_FILE" | xargs) n8n "$@"; }
+# n8n CLI는 실행 중인 서비스와 같은 유저/홈(DB, 암호화 키 위치)으로 실행해야 한다.
+# (root로 실행하면 /root/.n8n 에 별도 DB가 새로 생겨 실제 n8n에 반영되지 않는다.)
+N8N_USER="$(systemctl show -p User --value n8n)"
+[[ -n "$N8N_USER" ]] || { echo "n8n 서비스 User 를 찾지 못함 — 중단"; exit 1; }
+N8N_HOME="$(getent passwd "$N8N_USER" | cut -d: -f6)"
+N8N_BIN="$(sudo -u "$N8N_USER" bash -lc 'command -v n8n' || true)"
+[[ -n "$N8N_BIN" ]] || N8N_BIN="$(systemctl show -p ExecStart --value n8n | grep -o 'path=[^ ;]*' | head -1 | cut -d= -f2)"
+echo "n8n user=$N8N_USER home=$N8N_HOME bin=$N8N_BIN"
+n8n_cli() { sudo -u "$N8N_USER" env HOME="$N8N_HOME" $(sudo cat "$ENV_FILE" | xargs) "$N8N_BIN" "$@"; }
 
 # 배포 토큰: 신규 생성하여 credential 로 import (토큰은 한 번만 출력)
 TOKEN="$(openssl rand -hex 32)"

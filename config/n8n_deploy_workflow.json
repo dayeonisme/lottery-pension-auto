@@ -13,7 +13,10 @@
       "name": "Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [240, 300],
+      "position": [
+        240,
+        300
+      ],
       "webhookId": "deploy-lottery-auto",
       "credentials": {
         "httpHeaderAuth": {
@@ -31,7 +34,10 @@
       "name": "Git Pull",
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
-      "position": [460, 300]
+      "position": [
+        460,
+        300
+      ]
     }
   ],
   "connections": {
@@ -51,5 +57,6 @@
     "executionOrder": "v1"
   },
   "staticData": null,
-  "tags": []
+  "tags": [],
+  "active": false
 }
