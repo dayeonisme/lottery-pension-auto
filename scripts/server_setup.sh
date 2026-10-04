@@ -21,6 +21,8 @@ N8N_HOME="$(getent passwd "$N8N_USER" | cut -d: -f6)"
 N8N_BIN="$(sudo -u "$N8N_USER" bash -lc 'command -v n8n' || true)"
 [[ -n "$N8N_BIN" ]] || N8N_BIN="$(systemctl show -p ExecStart --value n8n | grep -o 'path=[^ ;]*' | head -1 | cut -d= -f2)"
 echo "n8n user=$N8N_USER home=$N8N_HOME bin=$N8N_BIN"
+# n8n CLI가 현재 디렉터리를 스캔하므로 서비스 유저가 읽을 수 있는 곳으로 이동(EACCES 방지)
+cd "$N8N_HOME"
 n8n_cli() { sudo -u "$N8N_USER" env HOME="$N8N_HOME" $(sudo cat "$ENV_FILE" | xargs) "$N8N_BIN" "$@"; }
 
 # 배포 토큰: 신규 생성하여 credential 로 import (토큰은 한 번만 출력)
