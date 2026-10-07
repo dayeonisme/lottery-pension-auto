@@ -23,7 +23,7 @@ LOCK_PATH = ROOT / 'data' / 'lotto645.lock'
 
 sys.path.insert(0, str(Path(__file__).parent))
 from google_sheets import update_prize_results, append_purchase_rows
-from browser_lite import apply_resource_blocking
+from browser_lite import apply_resource_blocking, remove_resource_blocking
 
 USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36'
 KST = timezone(timedelta(hours=9))
@@ -555,6 +555,7 @@ def main():
                 if not dry_run:
                     draw_date = next_saturday()
                     logging.info('STEP 3: Purchasing tickets (%d장)...', count)
+                    remove_resource_blocking(context)
                     tickets = purchase_tickets(page, count=count)
 
                     logging.info('STEP 4: Updating Google Sheets...')
