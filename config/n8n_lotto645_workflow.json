@@ -7,13 +7,13 @@
           "interval": [
             {
               "field": "cronExpression",
-              "expression": "0 10 * * 1"
+              "expression": "0 10,11,14 * * 1"
             }
           ]
         }
       },
       "id": "trigger-lotto645",
-      "name": "Schedule Trigger (Monday 10:00)",
+      "name": "Schedule Trigger (Monday 10·11·14:00)",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.1,
       "position": [240, 300]
@@ -31,7 +31,7 @@
     }
   ],
   "connections": {
-    "Schedule Trigger (Monday 10:00)": {
+    "Schedule Trigger (Monday 10·11·14:00)": {
       "main": [
         [
           {
