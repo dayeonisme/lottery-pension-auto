@@ -25,6 +25,8 @@ LOCK_PATH = ROOT / 'data' / 'pension720.lock'
 sys.path.insert(0, str(Path(__file__).parent))
 from google_sheets import update_prize_results, append_purchase_rows
 from browser_lite import apply_resource_blocking, remove_resource_blocking
+from purchase_guard import already_purchased, buy_attempted, mark_buy_attempt
+from failure_diag import track_pending_requests, capture_failure
 
 USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36'
 KST = timezone(timedelta(hours=9))
@@ -77,13 +79,6 @@ def check_prize(ticket_group: int, ticket_numbers: str, win_group: int, win_numb
     if ticket_numbers[-2:] == win_numbers[-2:]: return {'rank': '6th', 'prize': 5000}
     if ticket_numbers[-1:] == win_numbers[-1:]: return {'rank': '7th', 'prize': 1000}
     return {'rank': 'no prize', 'prize': 0}
-
-
-def _prune_failure_screenshots(keep: int = 5):
-    """logs/failure_pension720_*.png 최신 keep개만 남기고 정리 (실패 진단용, 무한 누적 방지)."""
-    shots = sorted(LOG_PATH.parent.glob('failure_pension720_*.png'), key=lambda p: p.stat().st_mtime, reverse=True)
-    for shot in shots[keep:]:
-        shot.unlink(missing_ok=True)
 
 
 def _init_last_run():
@@ -219,7 +214,7 @@ def collect_report_results(win_round: int) -> list:
 
 
 # STEP 3 모바일 플로우 (GCP IP 차단 우회: el.dhlottery.co.kr/game_mobile/)
-def _purchase_mobile(page) -> list:
+def _purchase_mobile(page, before_buy=None) -> list:
     """전제: 이미 로그인된 page. 모바일 전용 구매 페이지 사용."""
     from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
     mobile_url = 'https://el.dhlottery.co.kr/game_mobile/pension720/game.jsp'
@@ -266,6 +261,8 @@ def _purchase_mobile(page) -> list:
         logging.info('%d조 번호 선택 완료', jo)
 
     logging.info('번호 선택 완료 — 구매 진행')
+    if before_buy:
+        before_buy()
     page.evaluate('doOrder()')  # confirm 다이얼로그는 page.on('dialog') 에서 자동 수락
 
     page.wait_for_selector('.buyComplete', state='visible', timeout=15000)
@@ -289,7 +286,7 @@ def _purchase_mobile(page) -> list:
 
 
 # STEP 3: 5게임 자동구매 — 데스크탑 우선, 모바일 폴백
-def purchase_tickets(page) -> list:
+def purchase_tickets(page, before_buy=None) -> list:
     page.on('dialog', lambda d: d.accept())
 
     logging.info('Navigating to login page...')
@@ -316,7 +313,7 @@ def purchase_tickets(page) -> list:
     # 모바일로 리다이렉트됐으면 모바일 플로우로 전환
     if 'm.dhlottery.co.kr' in page.url:
         logging.info('Desktop purchase page redirected to mobile — switching to mobile flow')
-        return _purchase_mobile(page)
+        return _purchase_mobile(page, before_buy)
 
     # 팝업(미수령 당첨금 안내 등) 닫기 시도
     try:
@@ -338,7 +335,7 @@ def purchase_tickets(page) -> list:
             'Desktop iframe#ifrm_tab not found after 30s (url=%s) — falling back to mobile flow',
             page.url,
         )
-        return _purchase_mobile(page)
+        return _purchase_mobile(page, before_buy)
     frame_el = page.query_selector('iframe#ifrm_tab')
     frame = frame_el.content_frame()
     if frame is None:
@@ -359,6 +356,8 @@ def purchase_tickets(page) -> list:
     logging.info('번호 선택 완료 — 구매 진행')
 
     # 구매하기 클릭 → 확인 팝업에서 최종 구매 확정
+    if before_buy:
+        before_buy()
     frame.click('a.lotto720_btn_pay')
     frame.wait_for_selector('#lotto720_popup_confirm', state='visible', timeout=10000)
     frame.click('#lotto720_popup_confirm a.btn_blue')  # doOrderRequest()
@@ -433,10 +432,10 @@ def _run_timeout(signum, frame):
 def main():
     dry_run = '--dry-run' in sys.argv
     test_sheets = '--test-sheets' in sys.argv
+    force = '--force' in sys.argv  # 중복 구매 방지(purchase_guard) 무시
 
     (ROOT / 'logs').mkdir(exist_ok=True)
     (ROOT / 'data').mkdir(exist_ok=True)
-    _prune_failure_screenshots()
     if not PURCHASES_PATH.exists():
         PURCHASES_PATH.write_text(json.dumps({'pension720': []}, indent=2, ensure_ascii=False))
 
@@ -511,6 +510,18 @@ def main():
                 if pending_round > 0:
                     set_pending_sheets_round(0)
 
+            # 중복 구매 방지: n8n이 10·11·14시에 실행 — 앞선 실행이 성공했으면 브라우저 없이 종료
+            draw_date = next_thursday()
+            if not force:
+                if already_purchased(PURCHASES_PATH, 'pension720', draw_date):
+                    logging.info('Already purchased for draw %s — skipping (retry run)', draw_date)
+                    return
+                if buy_attempted(LAST_RUN_PATH, 'pension720', draw_date):
+                    raise RuntimeError(
+                        f'이전 실행이 구매 버튼 클릭 후 실패 — {draw_date} 추첨분 구매 여부 불확실. '
+                        f'중복 구매 방지로 건너뜀. 동행복권 구매내역 확인 후 필요하면 --force로 수동 실행'
+                    )
+
         from playwright.sync_api import sync_playwright
         with sync_playwright() as p:
             browser = p.chromium.launch(
@@ -534,6 +545,7 @@ def main():
                 )
                 apply_resource_blocking(context)
                 page = context.new_page()
+                pending_requests = track_pending_requests(page)
 
                 logging.info('STEP 1: Fetching winning numbers...')
                 win_info = fetch_winning_numbers(page)
@@ -543,10 +555,11 @@ def main():
                 prize_results = check_prizes(win_info, dry_run=dry_run)
 
                 if not dry_run:
-                    draw_date = next_thursday()
                     logging.info('STEP 3: Purchasing tickets...')
                     remove_resource_blocking(context)
-                    tickets = purchase_tickets(page)
+                    tickets = purchase_tickets(
+                        page, before_buy=lambda: mark_buy_attempt(LAST_RUN_PATH, 'pension720', draw_date),
+                    )
 
                     logging.info('STEP 4: Updating Google Sheets...')
                     save_and_update_sheets(win_info['round'], tickets, prize_results, draw_date)
@@ -588,12 +601,7 @@ def main():
                     logging.info('[DRY-RUN] STEP 3+4 skipped. Prize results: %d entries', len(prize_results))
             except Exception:
                 if not dry_run and page is not None:
-                    try:
-                        shot_path = LOG_PATH.parent / f'failure_pension720_{now_kst().strftime("%Y%m%d_%H%M%S")}.png'
-                        page.screenshot(path=str(shot_path))
-                        logging.error('Failure diagnostics: url=%s screenshot=%s', page.url, shot_path)
-                    except Exception as diag_err:
-                        logging.error('Failed to capture failure diagnostics: %r', diag_err)
+                    capture_failure(page, 'pension720', LOG_PATH.parent, pending_requests)
                 raise
             finally:
                 signal.alarm(0)

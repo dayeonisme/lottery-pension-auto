@@ -7,13 +7,13 @@
           "interval": [
             {
               "field": "cronExpression",
-              "expression": "0 10 * * 5"
+              "expression": "0 10,11,14 * * 5"
             }
           ]
         }
       },
       "id": "trigger-pension720",
-      "name": "Schedule Trigger (Friday 10:00)",
+      "name": "Schedule Trigger (Friday 10·11·14:00)",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.1,
       "position": [240, 300]
@@ -31,7 +31,7 @@
     }
   ],
   "connections": {
-    "Schedule Trigger (Friday 10:00)": {
+    "Schedule Trigger (Friday 10·11·14:00)": {
       "main": [
         [
           {

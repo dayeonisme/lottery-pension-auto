@@ -161,8 +161,10 @@ export $(sudo cat /etc/n8n/env | xargs) && timeout 600 <repo-path>/.venv/bin/pyt
 
 n8n에서 아래 워크플로 템플릿을 import한 뒤, Execute Command 노드의 커맨드에 있는 경로를 실제 배포 경로로 바꿉니다.
 
-- `config/n8n_lotto645_workflow.json` (Schedule: 매주 월요일 10:00)
-- `config/n8n_pension720_workflow.json` (Schedule: 매주 금요일 10:00)
+- `config/n8n_lotto645_workflow.json` (Schedule: 매주 월요일 10:00, 재시도 11:00·14:00)
+- `config/n8n_pension720_workflow.json` (Schedule: 매주 금요일 10:00, 재시도 11:00·14:00)
+  - 재시도 실행은 해당 추첨일 구매 기록이 있으면 브라우저 없이 바로 종료(`scripts/purchase_guard.py`). 이전 실행이 구매 버튼 클릭 후 실패했으면 구매 여부가 불확실하므로 자동 구매하지 않고 FAIL 알림 — 동행복권 구매내역 확인 후 필요하면 `--force`로 수동 실행
+  - 실패 시 `logs/failure_{lotto645|pension720}_*.png` 스크린샷과 URL·응답 대기 요청을 로그에 남김(`scripts/failure_diag.py`, 최근 5장 유지)
 - `config/n8n_monthly_report_workflow.json` (Schedule: 매월 1일 10:00) — `scripts/monthly_report.py`가 Sheets `raw` 시트를 집계해 지난달 구매 횟수·금액, 등수별 당첨 건수, 총 당첨금을 Telegram으로 발송 (`--month YYYY-MM`, `--dry-run` 지원)
 - `config/n8n_quarterly_report_workflow.json` (Schedule: 1·4·7·10월 1일 10:00) — `monthly_report.py --quarterly`로 직전 분기 결산 발송 (`--quarter YYYY-Qn` 지원)
 - `config/n8n_deploy_workflow.json` (Webhook, POST `/webhook/deploy-lottery-auto`) — 호출 시 서버에서 `git pull --ff-only` 후 최신 커밋을 응답으로 반환. import 후 n8n Credentials에서 **Header Auth**(name: `X-Deploy-Token`, value: 임의의 긴 랜덤 문자열)를 `deploy-token`으로 만들어 Webhook 노드에 연결하고 워크플로를 Active로 켠다. 토큰은 저장소에 커밋하지 않는다.

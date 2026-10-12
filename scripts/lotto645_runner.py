@@ -24,6 +24,8 @@ LOCK_PATH = ROOT / 'data' / 'lotto645.lock'
 sys.path.insert(0, str(Path(__file__).parent))
 from google_sheets import update_prize_results, append_purchase_rows
 from browser_lite import apply_resource_blocking, remove_resource_blocking
+from purchase_guard import already_purchased, buy_attempted, mark_buy_attempt
+from failure_diag import track_pending_requests, capture_failure
 
 USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36'
 KST = timezone(timedelta(hours=9))
@@ -203,7 +205,7 @@ def collect_report_results(win_round: int) -> list:
     return results
 
 
-def _purchase_mobile_lotto645(page, count: int = 5) -> list:
+def _purchase_mobile_lotto645(page, count: int = 5, before_buy=None) -> list:
     """전제: 이미 로그인된 page. ol.dhlottery.co.kr 모바일 전용 구매 페이지 사용."""
     # www.dhlottery.co.kr 로그인 쿠키를 ol.dhlottery.co.kr 도메인에 복사
     ctx = page.context
@@ -230,6 +232,8 @@ def _purchase_mobile_lotto645(page, count: int = 5) -> list:
         logging.info('addRandomNum() %d/%d', i + 1, count)
 
     time.sleep(0.5)
+    if before_buy:
+        before_buy()
     page.click('#btnBuy')
 
     page.wait_for_selector('.btn-rec01.buttonOk', state='visible', timeout=10000)
@@ -260,7 +264,7 @@ def _purchase_mobile_lotto645(page, count: int = 5) -> list:
 
 
 # STEP 3: 자동구매 (count: 구매 장수, 기본 5)
-def purchase_tickets(page, count: int = 5) -> list:
+def purchase_tickets(page, count: int = 5, before_buy=None) -> list:
     page.on('dialog', lambda d: d.accept())
 
     logging.info('Navigating to login page...')
@@ -300,7 +304,7 @@ def purchase_tickets(page, count: int = 5) -> list:
 
     if 'm.dhlottery.co.kr' in page.url:
         logging.info('Desktop purchase page redirected to mobile — switching to mobile flow')
-        return _purchase_mobile_lotto645(page, count)
+        return _purchase_mobile_lotto645(page, count, before_buy)
 
     # 팝업(미수령 당첨금 안내 등) 닫기 시도
     try:
@@ -328,6 +332,8 @@ def purchase_tickets(page, count: int = 5) -> list:
     frame.click('#btnSelectNum')
     time.sleep(1)
 
+    if before_buy:
+        before_buy()
     frame.click('#btnBuy')
     time.sleep(1.5)
 
@@ -449,6 +455,7 @@ def _run_timeout(signum, frame):
 def main():
     dry_run = '--dry-run' in sys.argv
     test_sheets = '--test-sheets' in sys.argv
+    force = '--force' in sys.argv  # 중복 구매 방지(purchase_guard) 무시
 
     count = 5
     if '--count' in sys.argv:
@@ -536,6 +543,18 @@ def main():
                     logging.warning('Sheets retry: no checked entries for round %d — clearing stale pending flag', pending_round)
                     set_pending_sheets_round(0)
 
+            # 중복 구매 방지: n8n이 10·11·14시에 실행 — 앞선 실행이 성공했으면 브라우저 없이 종료
+            draw_date = next_saturday()
+            if not force:
+                if already_purchased(PURCHASES_PATH, 'lotto645', draw_date):
+                    logging.info('Already purchased for draw %s — skipping (retry run)', draw_date)
+                    return
+                if buy_attempted(LAST_RUN_PATH, 'lotto645', draw_date):
+                    raise RuntimeError(
+                        f'이전 실행이 구매 버튼 클릭 후 실패 — {draw_date} 추첨분 구매 여부 불확실. '
+                        f'중복 구매 방지로 건너뜀. 동행복권 구매내역 확인 후 필요하면 --force로 수동 실행'
+                    )
+
         from playwright.sync_api import sync_playwright
         with sync_playwright() as p:
             browser = p.chromium.launch(
@@ -551,6 +570,7 @@ def main():
                 ]
             )
             try:
+                page = None
                 context = browser.new_context(
                     user_agent=USER_AGENT,
                     viewport={'width': 1280, 'height': 720},
@@ -558,6 +578,7 @@ def main():
                 )
                 apply_resource_blocking(context)
                 page = context.new_page()
+                pending_requests = track_pending_requests(page)
 
                 logging.info('STEP 1: Fetching winning numbers...')
                 win_info = fetch_winning_numbers(page)
@@ -567,10 +588,12 @@ def main():
                 prize_results = check_prizes(win_info, dry_run=dry_run)
 
                 if not dry_run:
-                    draw_date = next_saturday()
                     logging.info('STEP 3: Purchasing tickets (%d장)...', count)
                     remove_resource_blocking(context)
-                    tickets = purchase_tickets(page, count=count)
+                    tickets = purchase_tickets(
+                        page, count=count,
+                        before_buy=lambda: mark_buy_attempt(LAST_RUN_PATH, 'lotto645', draw_date),
+                    )
 
                     logging.info('STEP 4: Updating Google Sheets...')
                     save_and_update_sheets(win_info['round'], tickets, prize_results, draw_date)
@@ -610,6 +633,10 @@ def main():
                     )
                 else:
                     logging.info('[DRY-RUN] STEP 3+4 skipped. Prize results: %d entries', len(prize_results))
+            except Exception:
+                if not dry_run and page is not None:
+                    capture_failure(page, 'lotto645', LOG_PATH.parent, pending_requests)
+                raise
             finally:
                 signal.alarm(0)
                 browser.close()
