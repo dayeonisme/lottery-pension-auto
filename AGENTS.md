@@ -5,8 +5,8 @@ This file provides guidance to coding agents (Claude Code, Codex 등) when worki
 ## What this project does
 
 Automates weekly Dong-Haeng Lottery ticket purchases and prize checking:
-- **Lotto 6/45**: draws every Saturday → automation runs every Monday 10:00 (일요일은 모바일 구매 불가)
-- **Pension Lottery 720+**: draws every Thursday → automation runs every Friday 10:00
+- **Lotto 6/45**: draws every Saturday → automation runs every Monday 10:00, retries 11:00·14:00 (일요일은 모바일 구매 불가)
+- **Pension Lottery 720+**: draws every Thursday → automation runs every Friday 10:00, retries 11:00·14:00
 
 Each run: (1) fetches latest winning numbers via Playwright, (2) checks prizes for last week's unchecked tickets, (3) purchases 5 new auto-number tickets, (4) logs results to Google Sheets.
 
@@ -27,6 +27,10 @@ tail -f /home/ubuntu/lottery_auto/logs/pension720.log
 # GCP: 타임아웃으로 강제 종료됐는지 확인
 grep "timeout" /home/ubuntu/lottery_auto/logs/lotto645.log
 grep "timeout" /home/ubuntu/lottery_auto/logs/pension720.log
+
+# GCP: 실패 진단 (failure_diag — 실패 시점 URL/title/pending 요청, 스크린샷 최근 5장)
+grep -A12 "Failure diagnostics" /home/ubuntu/lottery_auto/logs/lotto645.log | tail -15
+ls -t /home/ubuntu/lottery_auto/logs/failure_*.png
 
 # GCP: hang 중인 프로세스 확인
 ps aux | grep python3
@@ -142,7 +146,7 @@ n8n (systemd) ─schedules──▶ python scripts/{runner}.py ──▶ Telegra
 ```
 
 **scripts/google_sheets.py** — shared module required by both runners. Manages service account auth (reads `config/service_account.json`), exposes:
-- `update_prize_results(lottery_type, round, ticket_results)` — finds rows by lottery type + round in `raw` sheet, batch-updates columns H–K
+- `update_prize_results(lottery_type, round_no, ticket_results, purchase_date=None)` — finds rows by lottery type + round (+ purchase_date if given) in `raw` sheet, batch-updates columns H–K; returns rows updated
 - `append_purchase_rows(lottery_type, purchase_data)` — appends 5 new rows to `raw` sheet
 - `fetch_raw_rows()` — returns all `raw` rows (header excluded); used by `monthly_report.py`
 
@@ -154,16 +158,23 @@ Both runners follow the identical 4-step pattern: fetch → check → purchase �
 |------|---------|
 | `data/lotto645_purchases.json` | Array under `lotto645` key. Each entry has `round`, `tickets[]`, `result.checked` |
 | `data/pension720_purchases.json` | Array under `pension720` key. Same structure; tickets have `group` + 6-digit `numbers` string |
-| `data/last_run.json` | Tracks `status`, `last_round`, `pending_sheets_round` per lottery type |
+| `data/last_run.json` | Tracks `status`, `last_round`, `pending_sheets_round`, `buy_attempt_draw_date` per lottery type |
 | `config/service_account.json` | Google service account key for Sheets/Drive API auth |
 
 ## Critical invariants
 
-**Round validation**: STEP 2 only checks prizes for an entry whose `round === winInfo.round` (the round returned by STEP 1). Never applies winning numbers to a future round.
+**Round validation**: STEP 2 only checks prizes for an entry whose `e['round'] == win_info['round']` (the round returned by STEP 1). Never applies winning numbers to a future round.
 
-**Duplicate-run protection**: A `.lock` file (`data/lotto645.lock` / `data/pension720.lock`) is created at start and deleted in `finally`. If the process finds an existing lock it exits immediately.
+**Duplicate-run protection**: A `.lock` file (`data/lotto645.lock` / `data/pension720.lock`) containing the PID is created at start and deleted in `finally`. If a lock exists and its PID is still alive, the process exits with code 1; a stale lock (dead/unreadable PID) is ignored and overwritten. `--dry-run` skips the lock entirely.
 
-**Pending Sheets recovery**: After STEP 2 writes prizes to JSON, `pending_sheets_round` is set in `last_run.json`. It is cleared only after the Sheets update succeeds. On the next run, if `pending_sheets_round > 0`, the Sheets update is retried before proceeding. 해당 회차의 `checked` 엔트리가 없으면 stale 플래그로 간주하고 즉시 0으로 초기화.
+**Duplicate-purchase guard** (`scripts/purchase_guard.py`): n8n이 같은 날 10·11·14시에 runner를 실행하므로 추첨일(`draw_date` = `next_saturday()`/`next_thursday()`) 기준으로 한 번만 구매한다. 브라우저 실행 전에 검사(`--dry-run`은 건너뜀).
+- purchases.json에 해당 `draw_date` 엔트리가 있으면 → 로그만 남기고 exit 0 (알림 없음).
+- 최종 구매 버튼 클릭 직전 `last_run.json`의 `buy_attempt_draw_date`에 기록. 이 값이 이번 `draw_date`인데 엔트리가 없으면(클릭 후 실패) 구매 여부 불확실 → 자동 구매하지 않고 FAIL 알림. 동행복권 구매내역 확인 후 미구매면 `--force`로 수동 실행.
+- 구매 플로우를 바꿀 때 `before_buy` 콜백이 실제 결제 버튼 클릭 *직전*에 호출되는지 유지할 것(데스크탑/모바일 모두).
+
+**Pending Sheets recovery**: STEP 2가 JSON에 당첨 결과를 쓴 뒤 Sheets 반영이 실패하면 다음 실행 시작 시 재시도한다. 두 runner의 방식이 다르다.
+- lotto645: `last_run.json`의 `pending_sheets_round`를 사용. 다음 실행에서 `> 0`이면 해당 회차의 `checked` 엔트리를 재반영하고, 반영 행이 1개 이상이면 0으로 초기화. `checked` 엔트리가 없으면 stale 플래그로 보고 즉시 0으로 초기화.
+- pension720: 엔트리별 `result.sheets_updated` 플래그를 사용. `checked`이면서 `sheets_updated == False`인 엔트리를 재반영하고, 성공한 엔트리만 `True`로 바꾼다. `pending_sheets_round`는 legacy로, 남아 있으면 0으로 정리만 한다.
 
 **Run timeout**: `signal.alarm(600)` — `logging.basicConfig()` 직후, 모든 I/O 작업 이전에 설정. 600초 초과 시 `os._exit(1)` 강제 종료. 타임아웃 발생 시 로그에 `600s timeout — force exit` 기록됨.
 
@@ -181,4 +192,5 @@ Single sheet named **`raw`**, columns A–K:
 - **서비스 계정 통합 (2026-10-04)**: Sheets 접근용 서비스 계정을 n8n 서버와 같은 GCP 프로젝트의 신규 계정으로 교체 완료(`scripts/gcp_service_account.sh`로 발급, 서버 `config/service_account.json` 교체, 시트 편집자 공유). 이전 키는 서버에 `config/service_account.json.old`로 백업.
 - **남은 정리 (1~2주 정상 동작 확인 후)**: 이전 프로젝트의 기존 서비스 계정 키 삭제/계정 사용 중지 → 시트 공유 목록에서 기존 서비스 계정 제거 → 서버 `service_account.json.old` 삭제.
 - 프로젝트 ID, 계정 이메일, IP 등 식별 정보는 저장소에 기록하지 않는다(로컬 메모/비밀번호 관리자에 보관).
+- **n8n 운영 워크플로는 저장소 JSON(`config/n8n_*_workflow.json`)과 별개** — JSON만 고쳐서는 반영 안 됨. 서버에서 n8n 서비스 유저(ubuntu)로 `n8n export:workflow --id=…` → 수정 → `import:workflow`(같은 id면 덮어씀, import 시 비활성화됨) → `update:workflow --id=… --active=true` → `systemctl restart n8n`. 작업 전 `~/.n8n/database.sqlite` 백업. 2026-10-12 로또/연금 cron을 이 방식으로 `0 10,11,14 * * 1|5`로 갱신.
 - 인프라 설정 스크립트: `scripts/gcp_firewall.sh`(내 PC, gcloud — 방화벽 내 IP 제한), `scripts/server_setup.sh <IP>`(서버 — pull, WEBHOOK_URL, n8n CLI로 워크플로/배포 토큰 credential import, 배포 워크플로 활성화). 월간 결산 워크플로는 dry-run 확인 후 수동 활성화.
