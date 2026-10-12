@@ -277,12 +277,26 @@ def purchase_tickets(page, count: int = 5) -> list:
         raise RuntimeError('Login failed: check DHLOTTERY_ID/PW or CAPTCHA')
     logging.info('Login successful')
 
+    # 메인 페이지 로딩 중에 el 도메인으로 이동하면 goto가 domcontentloaded에 도달하지 못하고 hang
+    # (2026-10-05, 10-12 월 10:00 실패. 연금은 로그인 후 networkidle까지 기다려 정상) → load까지 대기.
+    try:
+        page.wait_for_load_state('load', timeout=15000)
+    except Exception:
+        logging.warning('Main page load not reached in 15s — continuing')
+
     # GCP에서는 이 URL이 모바일(m.dhlottery.co.kr)로 리다이렉트되는 경우가 있으며, 모바일 페이지는
     # 백그라운드 요청이 지속돼 networkidle에 도달하지 못함 → domcontentloaded 사용.
-    page.goto(
-        'https://el.dhlottery.co.kr/game/TotalGame.jsp?LottoId=LO40',
-        wait_until='domcontentloaded', timeout=30000
-    )
+    for attempt in (1, 2):
+        try:
+            page.goto(
+                'https://el.dhlottery.co.kr/game/TotalGame.jsp?LottoId=LO40',
+                wait_until='domcontentloaded', timeout=30000
+            )
+            break
+        except Exception as e:
+            if attempt == 2:
+                raise
+            logging.warning('Purchase page goto failed (%s) — retrying once', type(e).__name__)
 
     if 'm.dhlottery.co.kr' in page.url:
         logging.info('Desktop purchase page redirected to mobile — switching to mobile flow')
