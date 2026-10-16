@@ -26,6 +26,7 @@ from google_sheets import update_prize_results, append_purchase_rows
 from browser_lite import apply_resource_blocking, remove_resource_blocking
 from purchase_guard import already_purchased, buy_attempted, mark_buy_attempt
 from failure_diag import track_pending_requests, capture_failure
+from login_check import ensure_logged_in
 
 USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36'
 KST = timezone(timedelta(hours=9))
@@ -276,9 +277,7 @@ def purchase_tickets(page, count: int = 5, before_buy=None) -> list:
     # 로그인 후 랜딩 페이지도 백그라운드 요청이 지속돼 networkidle 미도달 가능 (2026-09-16 재현) → domcontentloaded 사용.
     page.wait_for_load_state('domcontentloaded', timeout=30000)
 
-    is_logged_in = '/login' not in page.url
-    if not is_logged_in:
-        raise RuntimeError('Login failed: check DHLOTTERY_ID/PW or CAPTCHA')
+    ensure_logged_in(page)
     logging.info('Login successful')
 
     # 메인 페이지 로딩 중에 el 도메인으로 이동하면 goto가 domcontentloaded에 도달하지 못하고 hang
