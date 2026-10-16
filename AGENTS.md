@@ -113,6 +113,8 @@ Required environment variables: `DHLOTTERY_ID`, `DHLOTTERY_PW`
 
 **Browser resource blocking** (`scripts/browser_lite.py`): 두 runner 모두 font/media 요청 차단, 조회 전용 페이지(www 메인/당첨결과)의 이미지만 1px로 대체. 로그인·구매 페이지 이미지는 건드리지 않음(이미지형 버튼 클릭 불가 방지). STEP 3 직전 `remove_resource_blocking()`으로 route 전체 해제 — route가 걸린 채 로그인 직후 구매 페이지로 이동하면 goto가 30초 timeout(2026-10-05 로또 실패 원인). 문제 시 `/etc/n8n/env`에 `BROWSER_LITE=0` 추가로 배포 없이 비활성화.
 
+**Login check** (`scripts/login_check.py`): 두 runner 모두 로그인 클릭 후 `ensure_logged_in(page)`로 확인. 비밀번호 장기 미변경 계정은 로그인 후 `/mbrsrvc/ExpryPswdNoti`(비밀번호 변경안내)로 이동하며 세션 미성립 → "다음에 변경"(30일 연장) 자동 클릭. 이후 `#logoutBtn` 표시 여부로 최종 판정(URL에 `/login`이 없다는 것만으로는 오판 — 2026-10-16 연금 실패 원인). 구매 페이지 빈 화면/`doVerify()` 무응답이면 로그인 상태부터 의심.
+
 ## Settlement reports
 
 `scripts/monthly_report.py` — `raw` 시트를 읽어 결산 메시지를 Telegram으로 발송 (구매·브라우저 없음).
