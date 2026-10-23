@@ -88,6 +88,24 @@ sudo -u ubuntu env $(sudo cat /etc/n8n/env | xargs) /home/ubuntu/lottery_auto/.v
 
 > **주의**: `export $(...)` 후 별도 실행하면 `sudo -u ubuntu` 전환 시 환경변수가 전달되지 않아 `DHLOTTERY_ID/PW not set` 오류 발생.
 
+## 구매 실패 복구 (수동 재구매)
+
+사용자가 "예치금 충전했어, 오늘치 구매해줘"처럼 재구매를 요청하면 **실제 결제가 승인된 것**으로 보고 아래 절차를 따른다. 요청 없이 임의로 재구매하지 않는다.
+
+1. **서버 접속** — 내 PC에서 `gcloud compute ssh <instance> --zone <zone> --command '...'`. 인스턴스/zone은 `gcloud compute instances list`로 확인(저장소에 기록하지 않음). 네트워크가 막힌 샌드박스에서는 불가 → full access 필요.
+2. **상태 확인** — `data/last_run.json`의 해당 lottery `status`/`last_error`/`buy_attempt_draw_date`, purchases.json 마지막 엔트리의 `draw_date`, `logs/{lottery}.log`의 오늘 실행 기록.
+   - purchases.json에 이번 `draw_date` 엔트리가 이미 있으면 → 구매 완료 상태. 재구매 금지.
+   - 로그상 실패 지점이 결제 확정 전(예: `#lotto720_popup_confirm` 대기 timeout — 예치금 부족 시 증상, 로그인/번호 선택 실패)이면 → 미구매로 판단.
+   - 실패 지점이 결제 확정 이후로 보이거나 불분명하면 → 실행하지 말고 동행복권 구매내역 확인을 사용자에게 요청.
+3. **실행** — `buy_attempt_draw_date`가 이번 `draw_date`로 남아 있으면 가드가 막으므로 `--force`:
+   ```bash
+   sudo -u ubuntu env $(sudo cat /etc/n8n/env | xargs) /home/ubuntu/lottery_auto/.venv/bin/python3 /home/ubuntu/lottery_auto/scripts/pension720_runner.py --force
+   sudo -u ubuntu env $(sudo cat /etc/n8n/env | xargs) /home/ubuntu/lottery_auto/.venv/bin/python3 /home/ubuntu/lottery_auto/scripts/lotto645_runner.py --force
+   ```
+   로또는 일요일 모바일 구매 불가 — 월요일 이후 실행.
+4. **재시도 규칙** — STEP 1(당첨번호 조회)·STEP 2 실패는 결제 전이라 1회 재시도 가능. STEP 3에서 결제 버튼 클릭 이후 실패하면 재시도하지 않고 2번의 판단부터 다시 한다.
+5. **결과 보고** — `Purchased 5 tickets`, `Sheets: appended 5 rows` 로그 확인 후 회차·장수 요약. 동행복권 구매내역에서 중복 여부 확인을 권한다.
+
 ## Running scripts
 
 ```bash
