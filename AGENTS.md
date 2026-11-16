@@ -95,7 +95,7 @@ sudo -u ubuntu env $(sudo cat /etc/n8n/env | xargs) /home/ubuntu/lottery_auto/.v
 1. **서버 접속** — 내 PC에서 `gcloud compute ssh <instance> --zone <zone> --command '...'`. 인스턴스/zone은 `gcloud compute instances list`로 확인(저장소에 기록하지 않음). 네트워크가 막힌 샌드박스에서는 불가 → full access 필요.
 2. **상태 확인** — `data/last_run.json`의 해당 lottery `status`/`last_error`/`buy_attempt_draw_date`, purchases.json 마지막 엔트리의 `draw_date`, `logs/{lottery}.log`의 오늘 실행 기록.
    - purchases.json에 이번 `draw_date` 엔트리가 이미 있으면 → 구매 완료 상태. 재구매 금지.
-   - 로그상 실패 지점이 결제 확정 전(예: `#lotto720_popup_confirm` 대기 timeout — 예치금 부족 시 증상, 로그인/번호 선택 실패)이면 → 미구매로 판단.
+   - 로그상 실패 지점이 결제 확정 전(예: `예치금 부족: 보유 …원` — `before_buy` 전에 중단되므로 가드가 막지 않음, `#lotto720_popup_confirm` 대기 timeout — 잔액을 못 읽었을 때의 예치금 부족 증상, 로그인/번호 선택 실패)이면 → 미구매로 판단.
    - 실패 지점이 결제 확정 이후로 보이거나 불분명하면 → 실행하지 말고 동행복권 구매내역 확인을 사용자에게 요청.
 3. **실행** — `buy_attempt_draw_date`가 이번 `draw_date`로 남아 있으면 가드가 막으므로 `--force`:
    ```bash
@@ -191,6 +191,7 @@ Both runners follow the identical 4-step pattern: fetch → check → purchase �
 - purchases.json에 해당 `draw_date` 엔트리가 있으면 → 로그만 남기고 exit 0 (알림 없음).
 - 최종 구매 버튼 클릭 직전 `last_run.json`의 `buy_attempt_draw_date`에 기록. 이 값이 이번 `draw_date`인데 엔트리가 없으면(클릭 후 실패) 구매 여부 불확실 → 자동 구매하지 않고 FAIL 알림. 동행복권 구매내역 확인 후 미구매면 `--force`로 수동 실행.
 - 구매 플로우를 바꿀 때 `before_buy` 콜백이 실제 결제 버튼 클릭 *직전*에 호출되는지 유지할 것(데스크탑/모바일 모두).
+- **예치금 확인** (`scripts/deposit_check.py`): `before_buy` 직전에 구매 화면 body에서 `보유(중인) 예치금`/`예치금 잔액 N원`을 읽어 `1,000원 × 장수` 미만이면 `예치금 부족` 에러로 중단 → `buy_attempt_draw_date`가 기록되지 않아 충전 후 같은 날 재시도(11·14시)가 자동 구매. 잔액 문구를 못 읽으면 경고만 남기고 진행.
 
 **Pending Sheets recovery**: STEP 2가 JSON에 당첨 결과를 쓴 뒤 Sheets 반영이 실패하면 다음 실행 시작 시 재시도한다. 두 runner의 방식이 다르다.
 - lotto645: `last_run.json`의 `pending_sheets_round`를 사용. 다음 실행에서 `> 0`이면 해당 회차의 `checked` 엔트리를 재반영하고, 반영 행이 1개 이상이면 0으로 초기화. `checked` 엔트리가 없으면 stale 플래그로 보고 즉시 0으로 초기화.

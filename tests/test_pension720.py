@@ -42,3 +42,44 @@ def test_7th_prize():
 
 def test_no_prize():
     assert check_prize(1, '111111', 1, '307712') == {'rank': 'no prize', 'prize': 0}
+
+
+def test_desktop_insufficient_deposit_stops_before_purchase_attempt(monkeypatch):
+    from unittest.mock import MagicMock
+    import pytest
+    import pension720_runner as runner
+
+    monkeypatch.setenv('DHLOTTERY_ID', 'test')
+    monkeypatch.setenv('DHLOTTERY_PW', 'test')
+    monkeypatch.setattr(runner, 'ensure_logged_in', lambda page: None)
+    monkeypatch.setattr(runner.time, 'sleep', lambda seconds: None)
+    page = MagicMock()
+    page.url = 'https://el.dhlottery.co.kr/game/TotalGame.jsp?LottoId=LP72'
+    frame = page.query_selector.return_value.content_frame.return_value
+    frame.inner_text.return_value = '보유중인 예치금 충전 500 원'
+    before_buy = MagicMock()
+
+    with pytest.raises(RuntimeError, match='예치금 부족'):
+        runner.purchase_tickets(page, before_buy=before_buy)
+
+    before_buy.assert_not_called()
+    assert not any(call.args == ('a.lotto720_btn_pay',) for call in frame.click.call_args_list)
+
+
+def test_mobile_insufficient_deposit_stops_before_purchase_attempt(monkeypatch):
+    from unittest.mock import MagicMock
+    import pytest
+    import pension720_runner as runner
+
+    monkeypatch.setattr(runner.time, 'sleep', lambda seconds: None)
+    page = MagicMock()
+    page.url = 'https://el.dhlottery.co.kr/game_mobile/pension720/game.jsp'
+    page.query_selector.return_value = None
+    page.inner_text.return_value = '보유중인 예치금 충전 500 원'
+    before_buy = MagicMock()
+
+    with pytest.raises(RuntimeError, match='예치금 부족'):
+        runner._purchase_mobile(page, before_buy=before_buy)
+
+    before_buy.assert_not_called()
+    assert not any(call.args == ('doOrder()',) for call in page.evaluate.call_args_list)
