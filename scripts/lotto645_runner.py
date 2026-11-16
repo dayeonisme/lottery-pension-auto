@@ -26,7 +26,7 @@ from google_sheets import update_prize_results, append_purchase_rows
 from browser_lite import apply_resource_blocking, remove_resource_blocking
 from purchase_guard import already_purchased, buy_attempted, mark_buy_attempt
 from failure_diag import track_pending_requests, capture_failure
-from login_check import ensure_logged_in
+from login_check import ensure_logged_in, wait_after_login_click
 
 USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36'
 KST = timezone(timedelta(hours=9))
@@ -221,11 +221,13 @@ def _purchase_mobile_lotto645(page, count: int = 5, before_buy=None) -> list:
 
     page.goto(
         'https://ol.dhlottery.co.kr/olotto/game_mobile/game645.do',
-        wait_until='networkidle', timeout=30000,
+        wait_until='domcontentloaded', timeout=30000,
     )
     logging.info('Mobile lotto645 page: %s', page.url)
     if 'ol.dhlottery.co.kr' not in page.url:
         raise RuntimeError(f'Mobile purchase: redirected away from ol.dhlottery.co.kr. URL: {page.url}')
+    # networkidle 대신 실제 필요한 함수 로드 대기 (모바일 페이지는 백그라운드 요청 지속)
+    page.wait_for_function("() => typeof addRandomNum === 'function'", timeout=15000)
 
     for i in range(count):
         page.evaluate('addRandomNum()')
@@ -269,23 +271,15 @@ def purchase_tickets(page, count: int = 5, before_buy=None) -> list:
     page.on('dialog', lambda d: d.accept())
 
     logging.info('Navigating to login page...')
-    page.goto('https://www.dhlottery.co.kr/login', wait_until='networkidle', timeout=30000)
+    page.goto('https://www.dhlottery.co.kr/login', wait_until='domcontentloaded', timeout=30000)
     page.wait_for_selector('#inpUserId', timeout=10000)
     page.fill('#inpUserId', os.environ['DHLOTTERY_ID'])
     page.fill('#inpUserPswdEncn', os.environ['DHLOTTERY_PW'])
     page.click('#btnLogin')
-    # 로그인 후 랜딩 페이지도 백그라운드 요청이 지속돼 networkidle 미도달 가능 (2026-09-16 재현) → domcontentloaded 사용.
-    page.wait_for_load_state('domcontentloaded', timeout=30000)
+    wait_after_login_click(page)
 
     ensure_logged_in(page)
     logging.info('Login successful')
-
-    # 메인 페이지 로딩 중에 el 도메인으로 이동하면 goto가 domcontentloaded에 도달하지 못하고 hang
-    # (2026-10-05, 10-12 월 10:00 실패. 연금은 로그인 후 networkidle까지 기다려 정상) → load까지 대기.
-    try:
-        page.wait_for_load_state('load', timeout=15000)
-    except Exception:
-        logging.warning('Main page load not reached in 15s — continuing')
 
     # GCP에서는 이 URL이 모바일(m.dhlottery.co.kr)로 리다이렉트되는 경우가 있으며, 모바일 페이지는
     # 백그라운드 요청이 지속돼 networkidle에 도달하지 못함 → domcontentloaded 사용.
@@ -354,9 +348,13 @@ def purchase_tickets(page, count: int = 5, before_buy=None) -> list:
     frame = frame_el.content_frame()
     if frame is None:
         raise RuntimeError('iframe#ifrm_tab content_frame() returned None after purchase')
-    frame.wait_for_load_state('networkidle', timeout=15000)
+    # 결제 이후 단계 — networkidle 미도달로 예외가 나면 실제 구매됐는데 실패 처리됨 → best-effort 대기
+    try:
+        frame.wait_for_load_state('networkidle', timeout=15000)
+    except Exception:
+        logging.warning('Post-purchase frame networkidle not reached in 15s — continuing')
 
-    # 구매 실패 팝업 감지 (networkidle 후 — e2-micro 렌더링 완료 보장)
+    # 구매 실패 팝업 감지 (e2-micro 렌더링 완료 대기 후)
     popup_msg = frame.evaluate("""() => {
         const candidates = document.querySelectorAll(
             '.popup_section, [class*="alert"], [class*="layer"], [class*="modal"], [class*="popup"]'

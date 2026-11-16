@@ -27,7 +27,7 @@ from google_sheets import update_prize_results, append_purchase_rows
 from browser_lite import apply_resource_blocking, remove_resource_blocking
 from purchase_guard import already_purchased, buy_attempted, mark_buy_attempt
 from failure_diag import track_pending_requests, capture_failure
-from login_check import ensure_logged_in
+from login_check import ensure_logged_in, wait_after_login_click
 
 USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36'
 KST = timezone(timedelta(hours=9))
@@ -291,12 +291,12 @@ def purchase_tickets(page, before_buy=None) -> list:
     page.on('dialog', lambda d: d.accept())
 
     logging.info('Navigating to login page...')
-    page.goto('https://www.dhlottery.co.kr/login', wait_until='networkidle', timeout=30000)
+    page.goto('https://www.dhlottery.co.kr/login', wait_until='domcontentloaded', timeout=30000)
     page.wait_for_selector('#inpUserId', timeout=10000)
     page.fill('#inpUserId', os.environ['DHLOTTERY_ID'])
     page.fill('#inpUserPswdEncn', os.environ['DHLOTTERY_PW'])
     page.click('#btnLogin')
-    page.wait_for_load_state('networkidle', timeout=30000)
+    wait_after_login_click(page)
 
     ensure_logged_in(page)
     logging.info('Login successful')

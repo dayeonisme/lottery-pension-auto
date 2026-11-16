@@ -28,3 +28,20 @@ def ensure_logged_in(page) -> None:
             f'Login failed: #logoutBtn not visible after login (url={page.url}) '
             '— check DHLOTTERY_ID/PW, CAPTCHA, or a new post-login notice page'
         ) from None
+
+
+def wait_after_login_click(page) -> None:
+    """로그인 클릭 후 랜딩 페이지 대기. networkidle은 메인 페이지 백그라운드 요청 때문에 미도달 가능
+    (2026-09-16 로또, 2026-11-13 연금 10:00 실패) → URL 이동 + domcontentloaded, load는 best-effort."""
+    from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
+    # 클릭 직후엔 아직 /login 페이지라 domcontentloaded가 즉시 반환될 수 있음 → 이동부터 대기
+    try:
+        page.wait_for_url(lambda u: '/login' not in u, timeout=30000)
+    except PlaywrightTimeoutError:
+        pass  # ensure_logged_in()에서 최종 판정
+    page.wait_for_load_state('domcontentloaded', timeout=30000)
+    # 메인 페이지 로딩 중에 el 도메인으로 이동하면 goto가 hang (2026-10-05, 10-12 로또) → load까지 대기
+    try:
+        page.wait_for_load_state('load', timeout=15000)
+    except PlaywrightTimeoutError:
+        logging.warning('Landing page load not reached in 15s — continuing')
