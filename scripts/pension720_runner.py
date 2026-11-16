@@ -28,6 +28,7 @@ from browser_lite import apply_resource_blocking, remove_resource_blocking
 from purchase_guard import already_purchased, buy_attempted, mark_buy_attempt
 from failure_diag import track_pending_requests, capture_failure
 from login_check import ensure_logged_in, wait_after_login_click
+from deposit_check import ensure_sufficient_deposit
 
 USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36'
 KST = timezone(timedelta(hours=9))
@@ -262,6 +263,7 @@ def _purchase_mobile(page, before_buy=None) -> list:
         logging.info('%d조 번호 선택 완료', jo)
 
     logging.info('번호 선택 완료 — 구매 진행')
+    ensure_sufficient_deposit(page)
     if before_buy:
         before_buy()
     page.evaluate('doOrder()')  # confirm 다이얼로그는 page.on('dialog') 에서 자동 수락
@@ -355,6 +357,7 @@ def purchase_tickets(page, before_buy=None) -> list:
     logging.info('번호 선택 완료 — 구매 진행')
 
     # 구매하기 클릭 → 확인 팝업에서 최종 구매 확정
+    ensure_sufficient_deposit(frame, page)
     if before_buy:
         before_buy()
     frame.click('a.lotto720_btn_pay')

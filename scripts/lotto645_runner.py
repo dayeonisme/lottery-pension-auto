@@ -27,6 +27,7 @@ from browser_lite import apply_resource_blocking, remove_resource_blocking
 from purchase_guard import already_purchased, buy_attempted, mark_buy_attempt
 from failure_diag import track_pending_requests, capture_failure
 from login_check import ensure_logged_in, wait_after_login_click
+from deposit_check import ensure_sufficient_deposit
 
 USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36'
 KST = timezone(timedelta(hours=9))
@@ -235,6 +236,7 @@ def _purchase_mobile_lotto645(page, count: int = 5, before_buy=None) -> list:
         logging.info('addRandomNum() %d/%d', i + 1, count)
 
     time.sleep(0.5)
+    ensure_sufficient_deposit(page, count=count)
     if before_buy:
         before_buy()
     page.click('#btnBuy')
@@ -325,6 +327,8 @@ def purchase_tickets(page, count: int = 5, before_buy=None) -> list:
     frame.click('#btnSelectNum')
     time.sleep(1)
 
+    # 잔액 표시는 상위 페이지/iframe 중 어디에 있을지 불확실 → iframe 먼저, 없으면 상위 페이지
+    ensure_sufficient_deposit(frame, page, count=count)
     if before_buy:
         before_buy()
     frame.click('#btnBuy')
