@@ -117,7 +117,17 @@ def set_pending_sheets_round(round_no: int):
 
 # STEP 1: 최신 당첨번호 조회
 def fetch_winning_numbers(page) -> dict:
-    page.goto('https://www.dhlottery.co.kr/pt720/result', wait_until='networkidle', timeout=30000)
+    page.goto('https://www.dhlottery.co.kr/pt720/result', wait_until='domcontentloaded', timeout=30000)
+    # 당첨번호는 HTML 로드 후 비동기로 렌더링됨 — networkidle이 렌더링보다 먼저 와서 빈 값을 읽은 적 있음
+    # (2026-11-20 10:00 실패, 2초 뒤 스크린샷엔 정상 표시) → 1등 번호 6자리가 채워질 때까지 대기.
+    try:
+        page.wait_for_function("""() => {
+            const wraps = document.querySelectorAll('.result-infoWrap');
+            const ball = wraps[wraps.length - 1]?.querySelector('.result-wfBall');
+            return !!ball && [1,2,3,4,5,6].every(i => /^\\d$/.test(ball.querySelector(`.wf-${i}n`)?.textContent?.trim() || ''));
+        }""", timeout=20000)
+    except Exception:
+        logging.warning('Winning numbers not rendered in 20s — reading page anyway')
 
     result = page.evaluate("""() => {
         const wraps = document.querySelectorAll('.result-infoWrap');
