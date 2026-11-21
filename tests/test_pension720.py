@@ -83,3 +83,20 @@ def test_mobile_insufficient_deposit_stops_before_purchase_attempt(monkeypatch):
 
     before_buy.assert_not_called()
     assert not any(call.args == ('doOrder()',) for call in page.evaluate.call_args_list)
+
+
+def test_fetch_winning_numbers_waits_for_render_not_networkidle():
+    # 2026-11-20: networkidle 후 즉시 읽어 빈 값 → 번호 렌더링 대기로 변경
+    from unittest.mock import MagicMock
+    import pension720_runner as runner
+
+    page = MagicMock()
+    page.evaluate.return_value = {
+        'round': 342, 'winGroup': 4, 'winNumbers': '051131',
+        'bonusNumbers': '857332', 'drawDate': '2026-11-19',
+    }
+    result = runner.fetch_winning_numbers(page)
+
+    assert page.goto.call_args.kwargs['wait_until'] != 'networkidle'
+    page.wait_for_function.assert_called_once()
+    assert result['round'] == 342
